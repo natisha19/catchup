@@ -71,8 +71,16 @@ export class MockCatchupApi implements CatchupApi {
 
   async getInstrumentChange(instrumentId: string): Promise<ChangeDetail> {
     if (currentScenario === "apiDown") return data.failure("Provider unavailable");
-    const instrument = data.instruments[instrumentId];
-    if (!instrument) return data.failure(`Unknown instrument: ${instrumentId}`);
+    // Mirrors the real endpoint: any known/cataloged instrument resolves to a
+    // detail, even when no snapshot exists yet (freshly added stock).
+    const instrument =
+      data.instruments[instrumentId] ?? {
+        instrumentId,
+        symbol: instrumentId,
+        companyName: instrumentId,
+        exchange: "YAHOO",
+        currency: "USD",
+      };
     const snapshot = data.snapshots[instrumentId] ?? null;
     const latestSignal =
       data.signals.find((s) => s.instrumentId === instrumentId) ?? null;

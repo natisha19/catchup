@@ -4,9 +4,9 @@ Spins up a throwaway Postgres container (using the Docker CLI), runs the real
 Alembic migrations against it, and exposes plumbing so tests exercise the real
 repositories, services, and the FastAPI app against a real database.
 
-These tests are skipped unless CATCHUP_RUN_INTEGRATION=1 is set, so the default
-unit run (`python -m pytest tests/` with in-memory fakes) stays green without
-Docker. Run the real-DB suite with:
+These tests are excluded from the default run (pytest.ini `norecursedirs`
+ignores `tests/integration`), so `python -m pytest tests/` stays green without
+Docker. Run the real-DB suite explicitly:
 
     $env:CATCHUP_RUN_INTEGRATION=1; python -m pytest tests/integration -v
 """

@@ -84,8 +84,10 @@ The product is driven by a watchlist. Seed a few symbols and keep data flowing
 with the ingestion worker:
 
 ```bash
-# One-off ingestion of specific symbols (bootstrap a watchlist + baselines)
-python -c "import sys; sys.path.insert(0,'.'); from app.infrastructure.scheduler.worker import run_once; run_once(['TCS.NS','INFY.NS','HDFCBANK.NS'])"
+# Add stocks through the UI first; the worker polls only actively watched
+# instruments. For an already-added symbol, run a one-off full pass by its
+# canonical instrument id (not its Yahoo suffix):
+python -c "import sys; sys.path.insert(0,'.'); from app.infrastructure.scheduler.worker import run_once; run_once(['TCS','INFY','HDFCBANK'])"
 
 # Or run the periodic worker (loop; run in its own terminal / process)
 python -m app.infrastructure.scheduler.worker
@@ -125,11 +127,20 @@ npm run dev
 
 ## Tests
 
-Backend (no database or network required — uses in-memory fakes):
+Backend unit tests (no database or network required — uses in-memory fakes):
 
 ```bash
 cd backend
 python -m pytest tests/
+```
+
+PostgreSQL integration tests use Docker to provision a disposable database,
+apply the real Alembic migrations, and verify persistence and concurrent
+idempotency:
+
+```powershell
+$env:CATCHUP_RUN_INTEGRATION=1
+python -m pytest tests/integration -v
 ```
 
 Covers: return/z-score/volume math, baseline sufficiency, classification,

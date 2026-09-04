@@ -60,7 +60,7 @@ describe("WatchlistPage", () => {
     renderPage();
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load your watchlist");});
 
-  it("adding an instrument calls watchlistApi.addInstrument", async () => {
+  it("adding an instrument calls watchlistApi.addInstrument with id and symbol", async () => {
     setup();
     const user = userEvent.setup();
     renderPage();
@@ -69,7 +69,27 @@ describe("WatchlistPage", () => {
     await user.type(await screen.findByPlaceholderText(/Search by symbol/), "TCS");
     await user.click(await screen.findByRole("button", { name: /Add to watchlist/ }));
     await waitFor(() =>
-      expect(mockWatchlist.addInstrument).toHaveBeenCalledWith("tcs"),
+      expect(mockWatchlist.addInstrument).toHaveBeenCalledWith("tcs", "TCS"),
+    );
+  });
+
+  it("surfaces an add failure instead of silently failing, and Try again retries", async () => {
+    setup();
+    mockWatchlist.addInstrument
+      .mockRejectedValueOnce(new Error("Instrument already in watchlist: tcs"))
+      .mockResolvedValueOnce(undefined);
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Your watchlist is empty.");
+    await user.click(screen.getByRole("button", { name: "Add a stock" }));
+    await user.type(await screen.findByPlaceholderText(/Search by symbol/), "TCS");
+    await user.click(await screen.findByRole("button", { name: /Add to watchlist/ }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Unable to add");
+    expect(alert).toHaveTextContent("TCS");
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() =>
+      expect(mockWatchlist.addInstrument).toHaveBeenCalledTimes(2),
     );
   });
 

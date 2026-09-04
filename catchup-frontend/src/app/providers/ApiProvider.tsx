@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CatchupApi } from "../../api/catchupApi";
 import type { InstrumentApi, WatchlistApi } from "../../api/watchlistApi";
 import { apiConfig, ensureSession } from "../../api/clients";
@@ -36,13 +36,24 @@ const ApiContext = createContext<ApiContainer | null>(null);
 
 export function ApiProvider({ children }: { children: ReactNode }) {
   const container = useMemo(buildContainer, []);
+  const needsSession = apiConfig.mode === "http" && Boolean(apiConfig.baseUrl);
+  const [sessionReady, setSessionReady] = useState(!needsSession);
 
-  // In http mode, mint a signed session so every request carries identity.
+  // In http mode, mint a signed session before mounting request-making pages.
+  // Without this gate, AUTH_REQUIRED deployments can race their first feed
+  // request against session creation and render a misleading 401 error.
   useEffect(() => {
-    if (apiConfig.mode === "http" && apiConfig.baseUrl) {
-      void ensureSession();
-    }
-  }, []);
+    if (!needsSession) return;
+    void ensureSession().finally(() => setSessionReady(true));
+  }, [needsSession]);
+
+  if (!sessionReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-paper text-sm text-ink-muted" role="status">
+        Preparing your secure watchlist…
+      </div>
+    );
+  }
 
   return <ApiContext.Provider value={container}>{children}</ApiContext.Provider>;
 }

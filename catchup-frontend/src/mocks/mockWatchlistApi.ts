@@ -10,15 +10,18 @@ export class MockWatchlistApi implements WatchlistApi {
   }
 
   async addInstrument(instrumentId: string, symbol?: string): Promise<void> {
-    const id = symbol ?? instrumentId;
-    const instrument = data.instruments[id] ?? {
+    // Mirrors the backend: a known instrumentId wins; a bare symbol is only
+    // used to resolve + persist a stock the catalog does not know yet.
+    const id = instrumentId || symbol || "";
+    const known = data.instruments[id.toLowerCase()];
+    const instrument = known ?? {
       instrumentId: id,
       symbol: id,
       companyName: id,
       exchange: "YAHOO",
       currency: "USD",
     };
-    if (!this.items.some((i) => i.instrument.instrumentId === id)) {
+    if (!this.items.some((i) => i.instrument.instrumentId === instrument.instrumentId)) {
       // New instruments have no baseline yet — backend would report this.
       this.items.push({
         instrument,

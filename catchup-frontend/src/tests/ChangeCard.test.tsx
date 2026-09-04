@@ -40,4 +40,13 @@ describe("ChangeCard", () => {
     renderCard({ ...signal, dataStatus: "STALE" });
     expect(screen.getByRole("status")).toHaveTextContent("Stale data");
   });
+
+  it("labels stale data as latest session data when the market is closed", () => {
+    render(
+      <MemoryRouter>
+        <ChangeCard signal={{ ...signal, dataStatus: "STALE" }} marketStatus="CLOSED" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Latest session data");
+  });
 });

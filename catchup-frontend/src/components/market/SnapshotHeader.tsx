@@ -1,4 +1,4 @@
-import type { ChangeDetail } from "../../domain/types";
+import type { ChangeDetail, MarketStatus } from "../../domain/types";
 import { DataStatusBadge } from "../common/DataStatusBadge";
 import {
   formatCurrency, formatPercentage, formatSignedCurrency,
@@ -8,14 +8,18 @@ import { formatLastChecked } from "../../utils/date";
 export function SnapshotHeader({
   detail,
   currency,
+  marketStatus,
 }: {
   detail: ChangeDetail;
   currency: string;
+  marketStatus?: MarketStatus;
 }) {
   const { instrument, snapshot, latestSignal } = detail;
   const price = snapshot?.price ?? latestSignal?.currentPrice ?? null;
   const ret = latestSignal?.returnPct ?? null;
   const tone = ret === null ? "text-ink" : ret >= 0 ? "text-up" : "text-down";
+  const latestSession =
+    snapshot?.dataStatus === "STALE" && marketStatus === "CLOSED" && snapshot.observedAt;
 
   if (snapshot?.dataStatus === "UNAVAILABLE" && price === null) {
     return (
@@ -54,11 +58,16 @@ export function SnapshotHeader({
           )}
         </div>
       </div>
-      <div className="mt-3 flex items-center gap-2.5">
-        {snapshot && <DataStatusBadge status={snapshot.dataStatus} />}
-        {snapshot?.dataStatus === "STALE" && (
+      <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        {snapshot && (
+          <DataStatusBadge status={snapshot.dataStatus} marketStatus={marketStatus} />
+        )}
+        {snapshot?.dataStatus === "STALE" && snapshot.observedAt && (
           <span className="text-xs text-ink-muted">
-            Last updated {formatLastChecked(snapshot.observedAt)}
+            {latestSession ? "Observed " : "Last updated "}
+            <span className="font-medium text-ink-soft">
+              {formatLastChecked(snapshot.observedAt)}
+            </span>
           </span>
         )}
       </div>

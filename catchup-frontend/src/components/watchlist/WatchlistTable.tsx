@@ -14,29 +14,30 @@ export function WatchlistTable({
       {items.map(({ instrument, addedAt, baselineStatus }) => (
         <li
           key={instrument.instrumentId}
-          className="flex items-center justify-between gap-4 border-b border-line px-4 py-4 last:border-b-0 sm:px-5"
+          className="flex items-center justify-between gap-4 border-b border-line px-4 py-5 last:border-b-0 sm:px-5"
         >
           <div className="min-w-0">
-            <div className="flex items-baseline gap-2">
-              <Link
-                to={`/stock/${instrument.instrumentId}`}
-                className="text-base font-semibold text-ink hover:text-signal-notable hover:underline"
-              >
-                {instrument.symbol}
-              </Link>
+            <Link
+              to={`/stock/${instrument.instrumentId}`}
+              className="text-xl font-semibold tracking-tight text-ink hover:text-signal-notable hover:underline"
+            >
+              {instrument.symbol}
+            </Link>
+            <p className="mt-0.5 truncate text-sm text-ink-muted">
+              {instrument.companyName}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center rounded-full bg-paper px-2 py-0.5 text-[11px] font-medium text-ink-soft ring-1 ring-inset ring-line">
                 {instrument.exchange}
                 {instrument.currency ? ` · ${instrument.currency}` : ""}
               </span>
+              {baselineStatus === "INSUFFICIENT" && (
+                <span className="inline-flex items-center text-xs font-medium text-signal-significant">
+                  <span aria-hidden className="mr-1.5 h-1.5 w-1.5 rounded-full bg-accent" />
+                  Baseline being established.
+                </span>
+              )}
             </div>
-            <p className="mt-0.5 truncate text-sm text-ink-muted">
-              {instrument.companyName}
-            </p>
-            {baselineStatus === "INSUFFICIENT" && (
-              <p className="mt-1 text-xs font-medium text-signal-significant">
-                Baseline being established.
-              </p>
-            )}
           </div>
 
           <div className="flex shrink-0 items-center gap-3 sm:gap-5">

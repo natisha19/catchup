@@ -2,9 +2,9 @@ import type { CatchupFeed } from "../../domain/types";
 import { formatTimeOnly } from "../../utils/date";
 
 const statusConfig = {
-  OPEN: { dot: "bg-up", label: "Market open" },
-  CLOSED: { dot: "bg-ink-muted", label: "Market closed" },
-  UNKNOWN: { dot: "bg-ink-muted/50", label: "Market status unknown" },
+  OPEN: { dot: "bg-up", label: "Market open", hint: "Live session in progress" },
+  CLOSED: { dot: "bg-ink-muted", label: "Market closed", hint: "Stock exchanges are not trading" },
+  UNKNOWN: { dot: "bg-ink-muted/50", label: "Market status unknown", hint: "" },
 } as const;
 
 export function MarketStatusBanner({ feed }: { feed: CatchupFeed }) {
@@ -12,20 +12,24 @@ export function MarketStatusBanner({ feed }: { feed: CatchupFeed }) {
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 rounded-lg border border-line bg-card px-4 py-3 text-sm shadow-card"
+      className="card flex flex-row items-center justify-between gap-x-6 gap-y-1 px-4 py-3.5 sm:px-5"
     >
-      <span className="flex items-center gap-2.5 font-medium text-ink">
+      <span className="flex items-center gap-2.5">
         <span aria-hidden className={`h-2 w-2 rounded-full ${config.dot}`} />
-        {config.label}
+        <span className="font-semibold text-ink">{config.label}</span>
       </span>
-      {feed.marketStatus === "CLOSED" && feed.lastMarketSessionAt && (
-        <span className="text-ink-muted">
-          Last session{" "}
-          <span className="font-medium text-ink-soft">
-            {formatTimeOnly(feed.lastMarketSessionAt)}
-          </span>
-        </span>
-      )}
+      <span className="shrink-0 text-right text-sm text-ink-muted">
+        {feed.marketStatus === "CLOSED" && feed.lastMarketSessionAt ? (
+          <>
+            Last session{" "}
+            <span className="font-semibold text-ink">
+              {formatTimeOnly(feed.lastMarketSessionAt)}
+            </span>
+          </>
+        ) : (
+          config.hint
+        )}
+      </span>
     </div>
   );
 }

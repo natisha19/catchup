@@ -57,20 +57,41 @@ export async function httpJson<T>(path: string, init?: RequestInit): Promise<T> 
   if (!apiConfig.baseUrl) {
     throw new ApiError("API base URL is not configured", 0);
   }
-  const res = await fetch(`${apiConfig.baseUrl}${path}`, {
-    headers: {
-      Accept: "application/json",
-      ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
-      ...init?.headers,
-    },
-    ...init,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${apiConfig.baseUrl}${path}`, {
+      headers: {
+        Accept: "application/json",
+        ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+        ...init?.headers,
+      },
+      ...init,
+    });
+  } catch {
+    throw new ApiError(`Could not reach the API at ${apiConfig.baseUrl}`, 0);
+  }
   if (!res.ok) {
-    throw new ApiError(`Request failed: ${res.status}`, res.status);
+    throw new ApiError(await errorMessage(res), res.status);
   }
   if (res.status === 204 || res.status === 205) {
     return undefined as T;
   }
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
+}
+
+/**
+ * Backend errors follow FastAPI's `{ "detail": string }` envelope. Prefer the
+ * real detail when present; fall back to a status-based message otherwise.
+ */
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { detail?: unknown };
+    if (typeof body.detail === "string" && body.detail.trim()) {
+      return body.detail;
+    }
+  } catch {
+    // Non-JSON error body — fall through to the generic message.
+  }
+  return `Request failed: ${res.status}`;
 }

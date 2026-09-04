@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { ChangeSignal } from "../../domain/types";
+import type { ChangeSignal, MarketStatus } from "../../domain/types";
 import { SignificanceBadge } from "../common/Badge";
 import { DataStatusBadge } from "../common/DataStatusBadge";
 import {
@@ -11,7 +11,13 @@ const priceTone = (v: number | null) =>
 const priceArrow = (v: number | null) =>
   v === null || v === 0 ? "·" : v > 0 ? "↑" : "↓";
 
-export function ChangeCard({ signal }: { signal: ChangeSignal }) {
+export function ChangeCard({
+  signal,
+  marketStatus,
+}: {
+  signal: ChangeSignal;
+  marketStatus?: MarketStatus;
+}) {
   const isCritical = signal.significance === "CRITICAL";
   return (
     <article
@@ -29,7 +35,9 @@ export function ChangeCard({ signal }: { signal: ChangeSignal }) {
             >
               {signal.symbol}
             </Link>
-            {signal.dataStatus !== "LIVE" && <DataStatusBadge status={signal.dataStatus} />}
+            {signal.dataStatus !== "LIVE" && (
+              <DataStatusBadge status={signal.dataStatus} marketStatus={marketStatus} />
+            )}
           </div>
           <p className="mt-0.5 truncate text-sm text-ink-soft">{signal.companyName}</p>
           <p className="mt-1 text-sm font-medium text-ink">{signal.eventDescription}</p>
