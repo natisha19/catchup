@@ -12,7 +12,10 @@ export function AddInstrumentModal({ open, onClose }: { open: boolean; onClose: 
   const [added, setAdded] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const search = useAsync(() => instrument.search(query), [query, open]);
+  const search = useAsync(
+  () => query.trim() ? instrument.search(query.trim()) : Promise.resolve([]),
+  [query, open],
+);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
