@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     # Ingestion
     INGESTION_INTERVAL_SECONDS: int = 300
     INGESTION_ENABLED: bool = False
+    # Bounded concurrency for the fast quote phase (provider fetches run in a
+    # thread pool; DB writes stay serialized on the worker's session).
+    INGESTION_QUOTE_WORKERS: int = 4
+    # How often the slow enrichment phase (baseline history + corporate events)
+    # runs. Quotes refresh every INGESTION_INTERVAL_SECONDS; enrichment only on
+    # this cadence, so provider rate limits are not pressed on every tick.
+    INGESTION_ENRICHMENT_INTERVAL_SECONDS: int = 600
 
     # Freshness policy (minutes)
     DELAYED_THRESHOLD_MINUTES: int = 5
@@ -47,6 +54,13 @@ class Settings(BaseSettings):
     # Volume thresholds (ratio of current / baseline average).
     VOLUME_NOTABLE_RATIO: float = 2.0
     VOLUME_SIGNIFICANT_RATIO: float = 3.0
+
+    # Sessions / identity. The product is single-user today; sessions give each
+    # request a server-verified identity without per-user state. AUTH_REQUIRED
+    # upgrades the legacy fallback into a hard 401 for production-ish deploys.
+    SESSION_SECRET: str = "dev-only-secret-change-me"
+    SESSION_TTL_SECONDS: int = 7 * 24 * 60 * 60
+    AUTH_REQUIRED: bool = False
 
     LOG_LEVEL: str = "INFO"
 

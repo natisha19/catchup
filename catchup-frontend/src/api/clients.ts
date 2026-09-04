@@ -18,12 +18,51 @@ export class ApiError extends Error {
   }
 }
 
+let sessionToken: string | undefined;
+
+export function setSessionToken(token: string | undefined): void {
+  sessionToken = token;
+}
+
+export function getSessionToken(): string | undefined {
+  return sessionToken;
+}
+
+/**
+ * Mint a signed session from the backend and remember it. Identity is real but
+ * demo-grade: the backend signs {user_id, iat, exp} with a server secret. Used
+ * only in http mode; mock mode never calls this.
+ */
+export async function ensureSession(userId = "default-user"): Promise<boolean> {
+  if (!apiConfig.baseUrl || apiConfig.mode !== "http") {
+    return false;
+  }
+  try {
+    const res = await fetch(`${apiConfig.baseUrl}/auth/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId }),
+    });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { token: string };
+    sessionToken = body.token;
+    return true;
+  } catch {
+    sessionToken = undefined;
+    return false;
+  }
+}
+
 export async function httpJson<T>(path: string, init?: RequestInit): Promise<T> {
   if (!apiConfig.baseUrl) {
     throw new ApiError("API base URL is not configured", 0);
   }
   const res = await fetch(`${apiConfig.baseUrl}${path}`, {
-    headers: { Accept: "application/json", ...init?.headers },
+    headers: {
+      Accept: "application/json",
+      ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+      ...init?.headers,
+    },
     ...init,
   });
   if (!res.ok) {

@@ -7,9 +7,9 @@ import { formatTimestamp } from "../../utils/date";
 
 function RawRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-4 py-1 text-sm font-mono">
+    <div className="flex items-baseline justify-between gap-4 py-1 text-sm font-mono">
       <span className="text-ink-muted">{label}</span>
-      <span className="text-ink">{value}</span>
+      <span className="text-right text-ink">{value}</span>
     </div>
   );
 }
@@ -22,7 +22,7 @@ export function RawDataPanel({ detail }: { detail: ChangeDetail }) {
     <Collapsible title="Raw data">
       <div className="space-y-4">
         <div>
-          <h4 className="mb-1 text-xs font-semibold uppercase text-ink-muted">Signal</h4>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-muted">Signal</h4>
           <RawRow label="Event type" value={s?.eventType ?? "—"} />
           <RawRow label="Previous price" value={formatCurrency(s?.previousPrice ?? null)} />
           <RawRow label="Current price" value={formatCurrency(s?.currentPrice ?? null)} />
@@ -38,7 +38,7 @@ export function RawDataPanel({ detail }: { detail: ChangeDetail }) {
         </div>
         {snap && (
           <div>
-            <h4 className="mb-1 text-xs font-semibold uppercase text-ink-muted">Snapshot</h4>
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-muted">Snapshot</h4>
             <RawRow label="Source" value={snap.source} />
             <RawRow label="Observed at" value={formatTimestamp(snap.observedAt)} />
             <RawRow label="Received at" value={formatTimestamp(snap.receivedAt ?? null)} />

@@ -54,16 +54,46 @@ class YahooFinanceProvider(MarketDataProvider):
         import yfinance as yf
 
         def _fetch() -> Instrument:
-            info = _ticker_info(yf.Ticker(symbol))
-            code = _instrument_id_for(symbol)
-            return Instrument(
-                instrument_id=code,
-                symbol=symbol,
-                company_name=_pick(info, "shortName", "longName") or code,
-                exchange=_pick(info, "exchange", "exchangeName") or "YAHOO",
-                currency=_pick(info, "financialCurrency", "currency") or "USD",
-                provider_symbol=symbol,
-                sector=info.get("sector"),
+            original_symbol = symbol.strip().upper()
+
+            candidates = [original_symbol]
+
+            if "." not in original_symbol:
+                candidates.append(f"{original_symbol}.NS")
+
+            for provider_symbol in candidates:
+                ticker = yf.Ticker(provider_symbol)
+                info = _ticker_info(ticker)
+
+                try:
+                    history = ticker.history(
+                        period="5d",
+                        interval="1d",
+                        auto_adjust=False,
+                    )
+
+                    if history is not None and not history.empty:
+                        code = _instrument_id_for(provider_symbol)
+
+                        return Instrument(
+                            instrument_id=code,
+                            symbol=code,
+                            company_name=_pick(info, "shortName", "longName") or code,
+                            exchange=_pick(info, "exchange", "exchangeName") or "YAHOO",
+                            currency=_pick(
+                                info,
+                                "financialCurrency",
+                                "currency",
+                            ) or "USD",
+                            provider_symbol=provider_symbol,
+                            sector=info.get("sector"),
+                        )
+
+                except Exception:
+                    continue
+
+            raise ValueError(
+                f"Could not resolve Yahoo Finance symbol: {original_symbol}"
             )
 
         result = retry_provider_call(

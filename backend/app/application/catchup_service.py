@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from app.application.market_clock import market_status
+from app.application.market_clock import NseCalendar, market_status
 from app.domain.entities import (
     CatchupFeed,
     ChangeDetail,
@@ -53,6 +53,7 @@ class CatchupService:
         ranker,
         min_baseline_returns: int,
         stale_threshold_minutes: int,
+        calendar: NseCalendar | None = None,
     ) -> None:
         self._watchlists = watchlists
         self._instruments = instruments
@@ -61,7 +62,10 @@ class CatchupService:
         self._last_seen = last_seen
         self._ranker = ranker
         self._min_baseline_returns = min_baseline_returns
+        # Retained for call-site compatibility; marketStatus is now decided by
+        # the exchange calendar, never by data recency.
         self._stale_threshold_minutes = stale_threshold_minutes
+        self._calendar = calendar or NseCalendar()
 
     # ------------------------------------------------------------------ feed
     def watchlist_instruments(self, user_id: str) -> list:
@@ -111,17 +115,14 @@ class CatchupService:
         ordered = self._ranker.rank(changes, user_id)
 
         latest_observed = self._latest_observed_at(latest_snapshots, instrument_ids)
-        market = market_status(
-            latest_observed,
-            stale_threshold_minutes=self._stale_threshold_minutes,
-        )
+        market = market_status(latest_observed, calendar=self._calendar)
         provider = self._provider_status(latest_snapshots.values())
         last_checked = self._global_last_checked(seen_map)
 
         return CatchupFeed(
             last_checked_at=last_checked,
             market_status=market,
-            last_market_session_at=latest_observed,
+            last_market_session_at=self._calendar.previous_session_end(),
             changes=ordered,
             unchanged_count=unchanged,
             provider_status=provider,

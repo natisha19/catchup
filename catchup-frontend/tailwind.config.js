@@ -4,21 +4,35 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: { DEFAULT: "#101418", soft: "#3d454d", muted: "#6b7480" },
-        paper: "#fafbfc",
-        line: "#e4e7eb",
+        ink: { DEFAULT: "#111827", soft: "#3F4A5C", muted: "#667085" },
+        paper: "#F7F8FA",
+        line: "#E5E7EB",
+        card: "#FFFFFF",
+        // CATCHUP accent — used sparingly, never as the dominant color.
+        accent: { DEFAULT: "#F59E0B", soft: "#FFF8E6", line: "#FDE68A" },
         signal: {
-          critical: "#b42318",
-          significant: "#b54708",
-          notable: "#175cd3",
+          critical: "#DC2626",
+          significant: "#B45309",
+          notable: "#175CD3",
           normal: "#475467",
         },
-        up: "#027a48",
-        down: "#b42318",
+        up: "#16A34A",
+        upsoft: "#F0FDF4",
+        upline: "#BBF7D0",
+        down: "#DC2626",
+        downsoft: "#FEF2F2",
+        downline: "#FECACA",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["ui-monospace", "SFMono-Regular", "monospace"],
+        sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+      },
+      maxWidth: {
+        app: "1100px",
+      },
+      boxShadow: {
+        card: "0 1px 2px 0 rgb(16 24 40 / 0.04)",
+        raised: "0 8px 24px -8px rgb(16 24 40 / 0.16)",
       },
     },
   },

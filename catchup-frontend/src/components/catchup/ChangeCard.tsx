@@ -8,56 +8,88 @@ import {
 
 const priceTone = (v: number | null) =>
   v === null ? "text-ink" : v > 0 ? "text-up" : v < 0 ? "text-down" : "text-ink";
+const priceArrow = (v: number | null) =>
+  v === null || v === 0 ? "·" : v > 0 ? "↑" : "↓";
 
 export function ChangeCard({ signal }: { signal: ChangeSignal }) {
+  const isCritical = signal.significance === "CRITICAL";
   return (
     <article
-      aria-label={`signal.symbol:{signal.symbol}:signal.symbol:{signal.eventDescription}`}
-      className={`rounded-lg border bg-white p-5 ${
-        signal.significance === "CRITICAL"
-          ? "border-signal-critical border-l-4 border-l-signal-critical shadow-sm"
-          : "border-line"
+      aria-label={`${signal.symbol}: ${signal.eventDescription}`}
+      className={`card p-5 transition-shadow hover:shadow-raised ${
+        isCritical ? "border-l-2 border-l-signal-critical" : ""
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <Link
-            to={`/stock/${signal.instrumentId}`}
-            className="text-base font-semibold hover:underline"
-          >
-            {signal.symbol}
-          </Link>
-          <p className="text-sm text-ink-soft">{signal.eventDescription}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+            <Link
+              to={`/stock/${signal.instrumentId}`}
+              className="text-base font-semibold text-ink hover:text-signal-notable hover:underline"
+            >
+              {signal.symbol}
+            </Link>
+            {signal.dataStatus !== "LIVE" && <DataStatusBadge status={signal.dataStatus} />}
+          </div>
+          <p className="mt-0.5 truncate text-sm text-ink-soft">{signal.companyName}</p>
+          <p className="mt-1 text-sm font-medium text-ink">{signal.eventDescription}</p>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="shrink-0">
           <SignificanceBadge tier={signal.significance} />
-          {signal.dataStatus !== "LIVE" && <DataStatusBadge status={signal.dataStatus} />}
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <span className="font-mono text-sm text-ink-soft">
-          {formatCurrency(signal.previousPrice)} → {formatCurrency(signal.currentPrice)}
-        </span>
-        <span className={`font-semibold ${priceTone(signal.returnPct)}`}>
-          {formatPercentage(signal.returnPct)}
-        </span>
-      </div>
+      <dl className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <div>
+          <dt className="sr-only">Price</dt>
+          <dd className="font-mono text-base font-medium text-ink">
+            {formatCurrency(signal.currentPrice)}
+          </dd>
+        </div>
+        <div className="flex items-baseline gap-1">
+          <dt className="sr-only">Return</dt>
+          <span aria-hidden className={`text-sm font-semibold ${priceTone(signal.returnPct)}`}>
+            {priceArrow(signal.returnPct)}
+          </span>
+          <dd className={`text-sm font-semibold ${priceTone(signal.returnPct)}`}>
+            {formatPercentage(signal.returnPct)}
+          </dd>
+        </div>
+        <div className="text-sm text-ink-muted">
+          <dt className="sr-only">Previous price</dt>
+          <dd>
+            {formatCurrency(signal.previousPrice)} → {formatCurrency(signal.currentPrice)}
+          </dd>
+        </div>
+      </dl>
 
-      <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-ink-muted">
-        {signal.volumeRatio !== null && (
-          <span>Volume <span className="text-ink-soft">{formatRatio(signal.volumeRatio)}</span> normal</span>
-        )}
-        {signal.zScore !== null && signal.eventType !== "CORPORATE_EVENT" && (
-          <span>{formatSigma(signal.zScore)} above typical movement</span>
-        )}
-      </div>
+      {(signal.volumeRatio !== null || (signal.zScore !== null && signal.eventType !== "CORPORATE_EVENT")) && (
+        <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-3 text-sm text-ink-muted">
+          {signal.volumeRatio !== null && (
+            <div>
+              <dt className="sr-only">Volume versus normal</dt>
+              <dd>
+                Volume <span className="font-medium text-ink-soft">{formatRatio(signal.volumeRatio)}</span> normal
+              </dd>
+            </div>
+          )}
+          {signal.zScore !== null && signal.eventType !== "CORPORATE_EVENT" && (
+            <div>
+              <dt className="sr-only">Typical movement offset</dt>
+              <dd>
+                <span className="font-medium text-ink-soft">{formatSigma(signal.zScore)}</span> above typical movement
+              </dd>
+            </div>
+          )}
+        </dl>
+      )}
 
       <Link
         to={`/stock/${signal.instrumentId}`}
-        className="mt-4 inline-block text-sm font-medium text-signal-notable hover:underline"
+        className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-signal-notable transition-colors hover:text-signal-notable/80"
       >
-        Why this changed →
+        Why this changed
+        <span aria-hidden>→</span>
       </Link>
     </article>
   );

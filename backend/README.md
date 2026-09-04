@@ -47,7 +47,9 @@ Create `backend/.env` from `.env.example` and fill in the values below.
 | `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated allowed frontend origins. |
 | `PROVIDER_TIMEOUT_SECONDS` | `10` | per-request market-data timeout. |
 | `PROVIDER_MAX_RETRIES` | `3` | retries with backoff before giving up. |
-| `INGESTION_INTERVAL_SECONDS` | `300` | polling interval for the ingestion worker. |
+| `INGESTION_INTERVAL_SECONDS` | `300` | polling interval for the fast quote phase of the ingestion worker. |
+| `INGESTION_QUOTE_WORKERS` | `4` | bounded concurrency for provider quote fetches (DB writes stay serialized). |
+| `INGESTION_ENRICHMENT_INTERVAL_SECONDS` | `600` | cadence for the slow enrichment phase (baseline history + corporate events). |
 | `INGESTION_ENABLED` | `true` | whether the background ingestion worker runs. |
 | `STALE_THRESHOLD_MINUTES` | `30` | data older than this (during open market) is STALE. |
 | `DELAYED_THRESHOLD_MINUTES` | `5` | quote age above this but below the stale threshold is DELAYED. |
@@ -62,6 +64,9 @@ Create `backend/.env` from `.env.example` and fill in the values below.
 | `PRICE_CRITICAL_Z` | `3.0` | z-score for CRITICAL. |
 | `VOLUME_NOTABLE_RATIO` | `2.0` | volume ratio (current / average) for NOTABLE. |
 | `VOLUME_SIGNIFICANT_RATIO` | `3.0` | volume ratio for SIGNIFICANT. |
+| `SESSION_SECRET` | `dev-only-secret-change-me` | HMAC secret that signs session tokens. Change in any deployed env. |
+| `SESSION_TTL_SECONDS` | `604800` | session token lifetime (7 days). |
+| `AUTH_REQUIRED` | `false` | when `true`, requests without a valid session token get `401`. Default lets the app run single-user with no token. |
 | `LOG_LEVEL` | `INFO` | |
 
 ## 2. Create the database schema

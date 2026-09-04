@@ -23,6 +23,7 @@ from app.application.instrument_service import InstrumentService
 from app.application.watchlist_service import WatchlistService
 from app.infrastructure.database import get_session
 from app.main import app
+from app.market_data.catalog import default_catalog
 from app.relevance.ranking import RuleBasedRelevanceRanker
 from tests.fakes import (
     FakeChangeSignalRepo,
@@ -36,6 +37,7 @@ from tests.fakes import (
 from .test_catchup import make_signal, make_snapshot
 from app.domain.enums import SignificanceTier
 from tests.fakes import FakeProvider
+from tests.test_instrument_service import ResolveSpyProvider
 
 
 @pytest.fixture
@@ -79,6 +81,87 @@ def resolve_client():
         yield c
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def catalog_client():
+    """Client wired with the curated instrument universe + a resolve spy.
+
+    The spy fails the test if the provider is ever asked to interpret a bare
+    or cataloged symbol (the exact class of bug that made SBI -> a USD bond fund).
+    """
+    instruments = FakeInstrumentRepo()  # empty local catalog => zero-seed only
+    snapshots = FakeMarketSnapshotRepo()
+    signals = FakeChangeSignalRepo()
+    watchlists = FakeWatchlistRepo(instruments)
+    last_seen = FakeUserLastSeenRepo()
+
+    provider = ResolveSpyProvider()
+    instrument_service = InstrumentService(
+        instruments, provider=provider, catalog=default_catalog()
+    )
+    watchlist_service = WatchlistService(
+        watchlists=watchlists,
+        instruments=instruments,
+        snapshots=snapshots,
+        min_baseline_returns=20,
+        resolver=instrument_service.resolve_and_save,
+    )
+    catchup = CatchupService(
+        watchlists=watchlists,
+        instruments=instruments,
+        snapshots=snapshots,
+        signals=signals,
+        last_seen=last_seen,
+        ranker=RuleBasedRelevanceRanker(),
+        min_baseline_returns=20,
+        stale_threshold_minutes=30,
+    )
+
+    _dummy_session = object()
+    app.dependency_overrides[get_user_id] = lambda: "default-user"
+    app.dependency_overrides[get_session] = lambda: iter([_dummy_session])
+    app.dependency_overrides[get_catchup_service] = lambda: catchup
+    app.dependency_overrides[get_instrument_service] = lambda: instrument_service
+    app.dependency_overrides[get_watchlist_service] = lambda: watchlist_service
+
+    with TestClient(app) as c:
+        yield c, provider
+
+    app.dependency_overrides.clear()
+
+
+class TestCatalogResolution:
+    def test_add_sbi_alias_resolves_to_state_bank_of_india(self, catalog_client):
+        client, _ = catalog_client
+        resp = client.post("/watchlists/me/items", json={"symbol": "SBI"})
+        assert resp.status_code == 201
+        items = client.get("/watchlists/me").json()["items"]
+        assert len(items) == 1
+        assert items[0]["instrument"]["instrumentId"] == "SBIN"
+        assert items[0]["instrument"]["companyName"] == "State Bank of India"
+        assert items[0]["instrument"]["exchange"] == "NSE"
+
+    def test_cataloged_symbol_never_reaches_provider(self, catalog_client):
+        client, provider = catalog_client
+        client.post("/watchlists/me/items", json={"symbol": "SBI"})
+        client.post("/watchlists/me/items", json={"symbol": "TCS.NS"})
+        assert provider.resolve_calls == []
+
+    def test_bare_unknown_symbol_returns_404_without_provider(self, catalog_client):
+        client, provider = catalog_client
+        resp = client.post("/watchlists/me/items", json={"symbol": "ZZZZ"})
+        assert resp.status_code == 404
+        assert provider.resolve_calls == []
+
+    def test_search_returns_catalog_rows_on_empty_db(self, catalog_client):
+        client, _ = catalog_client
+        hits = client.get("/instruments/search", params={"q": "state bank"}).json()
+        ids = [h["instrument"]["instrumentId"] for h in hits]
+        assert "SBIN" in ids
+        assert [h["instrument"]["companyName"] for h in hits if h["instrument"]["instrumentId"] == "SBIN"] == [
+            "State Bank of India"
+        ]
 
 
 class TestResolveAndAdd:

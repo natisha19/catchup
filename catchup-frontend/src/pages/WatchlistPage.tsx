@@ -28,25 +28,50 @@ export function WatchlistPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Watchlist</h1>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-white hover:bg-ink-soft"
-        >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="eyebrow">Watchlist</p>
+          <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-ink">
+            Stocks you&apos;re watching
+          </h1>
+          {list.status === "success" && (
+            <p className="mt-1 text-sm text-ink-muted">
+              {list.data.items.length} stock{list.data.items.length === 1 ? "" : "s"} monitored
+            </p>
+          )}
+        </div>
+        <button onClick={() => setModalOpen(true)} className="btn-primary shrink-0">
+          <span aria-hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 5v14M5 12h14"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          </span>
           Add a stock
         </button>
       </div>
 
-      {list.status === "loading" && <Spinner label="Loading watchlist" />}
-      {list.status === "error" && (
-        <ErrorState title="Could not load your watchlist" message={list.error.message} onRetry={list.reload} />
-      )}
-      {list.status === "success" && (
-        list.data.items.length === 0
-          ? <EmptyWatchlist />
-          : <WatchlistTable items={list.data.items} onRemove={remove} />
-      )}
+      <div className="mt-8">
+        {list.status === "loading" && (
+          <div className="py-8"><Spinner label="Loading watchlist" /></div>
+        )}
+        {list.status === "error" && (
+          <ErrorState
+            title="Could not load your watchlist"
+            message={list.error.message}
+            onRetry={list.reload}
+          />
+        )}
+        {list.status === "success" && (
+          list.data.items.length === 0
+            ? <EmptyWatchlist />
+            : <WatchlistTable items={list.data.items} onRemove={remove} />
+        )}
+      </div>
 
       <AddInstrumentModal
         open={modalOpen}

@@ -12,7 +12,11 @@ export function ChangeFeed({ changes }: { changes: ChangeSignal[] }) {
   );
   return (
     <div className="space-y-4">
-      {ranked.map((s) => <ChangeCard key={s.id} signal={s} />)}
+      {ranked.map((s) => (
+        <div key={s.id} className="animate-fade-in">
+          <ChangeCard signal={s} />
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,7 +1,7 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import type { CatchupApi } from "../../api/catchupApi";
 import type { InstrumentApi, WatchlistApi } from "../../api/watchlistApi";
-import { apiConfig } from "../../api/clients";
+import { apiConfig, ensureSession } from "../../api/clients";
 import {
   HttpCatchupApi,
   HttpInstrumentApi,
@@ -36,6 +36,14 @@ const ApiContext = createContext<ApiContainer | null>(null);
 
 export function ApiProvider({ children }: { children: ReactNode }) {
   const container = useMemo(buildContainer, []);
+
+  // In http mode, mint a signed session so every request carries identity.
+  useEffect(() => {
+    if (apiConfig.mode === "http" && apiConfig.baseUrl) {
+      void ensureSession();
+    }
+  }, []);
+
   return <ApiContext.Provider value={container}>{children}</ApiContext.Provider>;
 }
 

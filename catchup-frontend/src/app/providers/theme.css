@@ -5,9 +5,48 @@
 @layer base {
   body {
     @apply bg-paper text-ink antialiased;
-    font-family: Inter, system-ui, sans-serif;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   :focus-visible {
-    @apply outline-none ring-2 ring-signal-notable ring-offset-2;
+    @apply outline-none ring-2 ring-signal-notable ring-offset-2 ring-offset-paper;
+  }
+  ::selection {
+    @apply bg-signal-notable/10 text-signal-notable;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-line bg-card shadow-card;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-card px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:bg-paper;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-ink px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-ink-soft;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-wider text-ink-muted;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in {
+    animation: none;
   }
 }

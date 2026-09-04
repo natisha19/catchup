@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api import catchup, instruments, watchlists
+from app.api import auth, catchup, instruments, watchlists
 from app.config import get_settings
 from app.infrastructure.database import get_session
 
@@ -56,6 +56,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(catchup.router)
 app.include_router(watchlists.router)
 app.include_router(instruments.router)

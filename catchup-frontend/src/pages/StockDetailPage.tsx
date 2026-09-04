@@ -14,7 +14,9 @@ export function StockDetailPage() {
   const { catchup } = useApis();
   const detail = useAsync(() => catchup.getInstrumentChange(instrumentId), [instrumentId]);
 
-  if (detail.status === "loading") return <div className="py-16"><Spinner label="Loading stock" /></div>;
+  if (detail.status === "loading") return (
+    <div className="flex min-h-[40vh] items-center justify-center"><Spinner label="Loading stock" /></div>
+  );
   if (detail.status === "error") {
     return <ErrorState title="Could not load this stock" message={detail.error.message} onRetry={detail.reload} />;
   }
@@ -24,7 +26,10 @@ export function StockDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link to="/" className="text-sm text-ink-muted hover:text-ink">← Back to feed</Link>
+      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-ink-muted transition-colors hover:text-ink">
+        <span aria-hidden>←</span> Back to feed
+      </Link>
+
       <SnapshotHeader detail={data} currency={data.instrument.currency} />
 
       {s && s.observedAt && (
@@ -33,24 +38,24 @@ export function StockDetailPage() {
 
       {s ? (
         <>
-          <section aria-labelledby="changed-heading" className="rounded-lg border border-line bg-white p-5">
-            <h2 id="changed-heading" className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+          <section aria-labelledby="changed-heading" className="card p-5">
+            <h2 id="changed-heading" className="eyebrow">
               What changed?
             </h2>
-            <p className="mt-2 text-lg font-medium">{s.eventDescription}</p>
+            <p className="mt-2 text-lg font-medium text-ink">{s.eventDescription}</p>
           </section>
           <WhyPanel signal={s} />
         </>
       ) : (
-        <section className="rounded-lg border border-line bg-white p-5">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">What changed?</h2>
+        <section className="card p-5">
+          <h2 className="eyebrow">What changed?</h2>
           <p className="mt-2 text-sm text-ink-muted">No significant changes since you last checked.</p>
         </section>
       )}
 
       {data.otherSignals.length > 0 && (
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted">Other changes</h2>
+          <h2 className="mb-3 eyebrow">Other changes</h2>
           <div className="space-y-4">
             {data.otherSignals.map((sig) => <ChangeCard key={sig.id} signal={sig} />)}
           </div>

@@ -15,11 +15,12 @@ export function SnapshotHeader({
   const { instrument, snapshot, latestSignal } = detail;
   const price = snapshot?.price ?? latestSignal?.currentPrice ?? null;
   const ret = latestSignal?.returnPct ?? null;
+  const tone = ret === null ? "text-ink" : ret >= 0 ? "text-up" : "text-down";
 
   if (snapshot?.dataStatus === "UNAVAILABLE" && price === null) {
     return (
-      <div role="status" className="rounded-lg border border-line bg-white p-5">
-        <h1 className="text-2xl font-bold">{instrument.symbol}</h1>
+      <div role="status" className="card p-5">
+        <h1 className="text-2xl font-bold text-ink">{instrument.symbol}</h1>
         <p className="mt-2 text-sm text-ink-muted">
           Market data temporarily unavailable.{" "}
           {snapshot && snapshot.observedAt && (
@@ -31,22 +32,29 @@ export function SnapshotHeader({
   }
 
   return (
-    <div className="rounded-lg border border-line bg-white p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
+    <div className="card p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">{instrument.symbol}</h1>
-          <p className="text-sm text-ink-muted">{instrument.companyName}</p>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-2xl font-bold text-ink">{instrument.symbol}</h1>
+            <span className="inline-flex items-center rounded-full bg-paper px-2 py-0.5 text-[11px] font-medium text-ink-soft ring-1 ring-inset ring-line">
+              {instrument.exchange}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-ink-muted">{instrument.companyName}</p>
         </div>
         <div className="text-right">
-          <p className="font-mono text-2xl">{formatCurrency(price, currency)}</p>
+          <p className="font-mono text-2xl font-medium tracking-tight text-ink sm:text-3xl">
+            {formatCurrency(price, currency)}
+          </p>
           {ret !== null && (
-            <p className={ret >= 0 ? "font-medium text-up" : "font-medium text-down"}>
+            <p className={`mt-0.5 text-sm font-semibold ${tone}`}>
               {formatPercentage(ret)}
             </p>
           )}
         </div>
       </div>
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-3 flex items-center gap-2.5">
         {snapshot && <DataStatusBadge status={snapshot.dataStatus} />}
         {snapshot?.dataStatus === "STALE" && (
           <span className="text-xs text-ink-muted">
@@ -55,18 +63,18 @@ export function SnapshotHeader({
         )}
       </div>
       {detail.previousSeenPrice !== null && price !== null && (
-        <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-3 text-sm">
+        <dl className="mt-5 grid grid-cols-3 gap-3 border-t border-line pt-4 text-sm">
           <div>
-            <dt className="text-ink-muted">You last saw</dt>
-            <dd className="font-mono">{formatCurrency(detail.previousSeenPrice, currency)}</dd>
+            <dt className="eyebrow">You last saw</dt>
+            <dd className="mt-1 font-mono text-ink">{formatCurrency(detail.previousSeenPrice, currency)}</dd>
           </div>
           <div>
-            <dt className="text-ink-muted">Now</dt>
-            <dd className="font-mono">{formatCurrency(price, currency)}</dd>
+            <dt className="eyebrow">Now</dt>
+            <dd className="mt-1 font-mono text-ink">{formatCurrency(price, currency)}</dd>
           </div>
           <div>
-            <dt className="text-ink-muted">Change</dt>
-            <dd className="font-mono">
+            <dt className="eyebrow">Change</dt>
+            <dd className={`mt-1 font-mono ${tone}`}>
               {formatSignedCurrency(price - detail.previousSeenPrice, currency)}{" "}
               ({formatPercentage(ret)})
             </dd>
@@ -74,7 +82,7 @@ export function SnapshotHeader({
         </dl>
       )}
       {detail.previousSeenPrice === null && (
-        <p className="mt-3 border-t border-line pt-3 text-sm italic text-signal-significant">
+        <p className="mt-4 border-t border-line pt-3 text-sm font-medium text-signal-significant">
           Baseline being established. Catchup will remember this price for next time.
         </p>
       )}

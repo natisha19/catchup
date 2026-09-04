@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.analytics.thresholds import SignificanceThresholds
@@ -27,11 +27,44 @@ from app.infrastructure.repositories.postgres import (
     UserLastSeenRepo,
     WatchlistRepo,
 )
+from app.market_data.catalog import default_catalog
 from app.relevance.ranking import RuleBasedRelevanceRanker
+
+
+def _catalog():
+    return default_catalog()
 
 # A single-user product today. This is the seam where real authentication can be
 # introduced without touching the domain or services.
 DEFAULT_USER_ID = "default-user"
+
+
+def _auth_token(request: Request) -> str | None:
+    auth = request.headers.get("Authorization", "")
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return request.headers.get("X-Catchup-Session")
+
+
+def get_user_id(request: Request) -> str:
+    """Identity for this request.
+
+    A valid signed session token (Authorization: Bearer / X-Catchup-Session)
+    is authoritative. Without one, the legacy single-user fallback applies
+    unless ``AUTH_REQUIRED`` is set, in which case the request is rejected.
+    """
+    from app.api.security import verify_session
+
+    token = _auth_token(request)
+    user_id = verify_session(token) if token else None
+    if user_id is not None:
+        return user_id
+    if get_settings().AUTH_REQUIRED:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="authentication required",
+        )
+    return DEFAULT_USER_ID
 
 
 def _provider():
@@ -44,14 +77,10 @@ def _provider():
     )
 
 
-def get_user_id() -> str:
-    return DEFAULT_USER_ID
-
-
 def get_instrument_service(
     session: Annotated[Session, Depends(get_session)],
 ) -> InstrumentService:
-    return InstrumentService(InstrumentRepo(session))
+    return InstrumentService(InstrumentRepo(session), catalog=_catalog())
 
 
 def get_watchlist_service(
@@ -59,7 +88,7 @@ def get_watchlist_service(
 ) -> WatchlistService:
     settings = get_settings()
     instrument_service = InstrumentService(
-        InstrumentRepo(session), provider=_provider()
+        InstrumentRepo(session), provider=_provider(), catalog=_catalog()
     )
     return WatchlistService(
         watchlists=WatchlistRepo(session),
