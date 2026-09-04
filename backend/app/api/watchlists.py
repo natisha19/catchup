@@ -69,7 +69,7 @@ def add_my_watchlist_item(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@router.delete("/me/items/{instrument_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/me/items/{instrument_id}", status_code=status.HTTP_200_OK)
 def remove_my_watchlist_item(
     instrument_id: str,
     user_id: Annotated[str, Depends(get_user_id)],
