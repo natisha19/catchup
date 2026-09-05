@@ -97,6 +97,14 @@ class FakeMarketSnapshotRepo:
             return None
         return max(hits, key=lambda s: s.observed_at)
 
+    def get_latest_for(self, instrument_ids: list[str]) -> dict[str, MarketSnapshot]:
+        out: dict[str, MarketSnapshot] = {}
+        for iid in instrument_ids:
+            latest = self.get_latest(iid)
+            if latest is not None:
+                out[iid] = latest
+        return out
+
     def get_by_id(self, snapshot_id: int) -> MarketSnapshot | None:
         return self._rows.get(snapshot_id)
 

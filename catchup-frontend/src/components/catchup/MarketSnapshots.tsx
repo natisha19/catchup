@@ -30,8 +30,8 @@ const tone = (v: number) => (v > 0 ? "text-up" : v < 0 ? "text-down" : "text-ink
 const arrow = (v: number) => (v > 0 ? "▲" : v < 0 ? "▼" : "·");
 
 /**
- * A real-data snapshot of the user's watchlist, fetched per instrument from the
- * existing /catchup/:id endpoint (never fabricated, never hard-coded).
+ * A real-data snapshot of the user's watchlist, fetched through one batched
+ * endpoint (never fabricated, never hard-coded).
  *
  * Every watched stock is shown — including freshly added ones that have no
  * baseline yet — so the feed is useful even when nothing "meaningfully
@@ -46,7 +46,7 @@ export function MarketSnapshots({
   items: WatchlistItem[];
   marketStatus?: MarketStatus;
 }) {
-  const { catchup } = useApis();
+  const { watchlist } = useApis();
   const [rows, setRows] = useState<Record<string, ChangeDetail | null | undefined>>({});
   const [secondsLeft, setSecondsLeft] = useState(REFRESH_SECONDS);
   const [refreshToken, setRefreshToken] = useState(0);
@@ -67,24 +67,18 @@ export function MarketSnapshots({
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all(
-      uniqueItems.map(async ({ instrument }) => {
-        let detail: ChangeDetail | null = null;
-        try {
-          detail = await catchup.getInstrumentChange(instrument.instrumentId);
-        } catch {
-          detail = null;
-        }
-        return [instrument.instrumentId, detail] as const;
-      }),
-    ).then((results) => {
-      if (cancelled) return;
-      setRows(Object.fromEntries(results));
-    });
+    watchlist.getMarketSnapshots()
+      .then((details) => {
+        if (cancelled) return;
+        setRows(Object.fromEntries(details.map((detail) => [detail.instrument.instrumentId, detail])));
+      })
+      .catch(() => {
+        if (!cancelled) setRows({});
+      });
     return () => {
       cancelled = true;
     };
-  }, [uniqueItems, catchup, refreshToken]);
+  }, [watchlist, uniqueItems, refreshToken]);
 
   // Auto-refresh: newly added stocks pick up their first snapshot when the
   // ingestion worker ticks, without reloading the page.

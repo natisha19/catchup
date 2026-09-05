@@ -27,6 +27,7 @@ from app.infrastructure.repositories.postgres import (
     InstrumentRepo,
     MarketSnapshotRepo,
 )
+from app.market_data.catalog import default_catalog
 from app.market_data.yahoo_provider import YahooFinanceProvider
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ def build_ingestion_service(session=None) -> IngestionService:
         delayed_threshold_minutes=settings.DELAYED_THRESHOLD_MINUTES,
         stale_threshold_minutes=settings.STALE_THRESHOLD_MINUTES,
         quote_workers=settings.INGESTION_QUOTE_WORKERS,
+        catalog=default_catalog(),
     )
 
 

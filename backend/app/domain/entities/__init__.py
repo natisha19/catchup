@@ -134,3 +134,24 @@ class ChangeDetail:
     latest_signal: ChangeSignal | None
     other_signals: list[ChangeSignal]
     last_checked_note: str | None = None
+    # Per-instrument exchange-calendar status (spec §16): the instrument's own
+    # exchange (NSE/NASDAQ/NYSE), never the feed's global status.
+    market_status: MarketStatus | None = None
+
+
+@dataclass(frozen=True)
+class ExploreItem:
+    """A single instrument in an Explore section: real snapshot + latest signal."""
+
+    instrument: Instrument
+    snapshot: MarketSnapshot | None = None
+    signal: ChangeSignal | None = None
+
+
+@dataclass(frozen=True)
+class ExploreSections:
+    movers: list[ExploreItem]
+    dippers: list[ExploreItem]
+    unusual: list[ExploreItem]
+    # Distinct sectors across the discovery universe (for by-sector browsing).
+    sectors: list[str]

@@ -1,5 +1,5 @@
 import type { WatchlistApi } from "../api/watchlistApi";
-import type { Instrument, Watchlist } from "../domain/types";
+import type { ChangeDetail, Instrument, Watchlist } from "../domain/types";
 import * as data from "./mockData";
 
 export class MockWatchlistApi implements WatchlistApi {
@@ -7,6 +7,20 @@ export class MockWatchlistApi implements WatchlistApi {
 
   async getWatchlist(): Promise<Watchlist> {
     return data.delay({ items: this.items, updatedAt: new Date().toISOString() });
+  }
+
+  async getMarketSnapshots(): Promise<ChangeDetail[]> {
+    return data.delay(this.items.map(({ instrument }) => {
+      const latestSignal = data.signals.find((signal) => signal.instrumentId === instrument.instrumentId) ?? null;
+      return {
+        instrument,
+        snapshot: data.snapshots[instrument.instrumentId] ?? null,
+        previousSeenPrice: latestSignal?.previousPrice ?? null,
+        latestSignal,
+        otherSignals: [],
+        marketStatus: instrument.exchange === "NSE" ? "CLOSED" : "UNKNOWN",
+      };
+    }));
   }
 
   async addInstrument(instrumentId: string, symbol?: string): Promise<void> {

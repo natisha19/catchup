@@ -6,7 +6,7 @@ import logging
 
 from app.domain.entities import Instrument
 from app.domain.interfaces.repositories import InstrumentRepository
-from app.market_data.catalog import InstrumentCatalog
+from app.market_data.catalog import InstrumentCatalog, search_score
 from app.market_data.provider import MarketDataProvider
 
 logger = logging.getLogger(__name__)
@@ -38,14 +38,19 @@ class InstrumentService:
         self._catalog = catalog
 
     def search(self, query: str, limit: int = 20) -> list[Instrument]:
-        """Catalog + local-catalog results merged, de-duplicated by business key."""
+        """Catalog + local-catalog results merged, de-duplicated by business key.
+
+        Ranked consistently with the catalog so an exact symbol always surfaces
+        first regardless of which source holds the row.
+        """
         merged: dict[str, Instrument] = {}
         if self._catalog is not None:
             for inst in self._catalog.search(query, limit=limit):
                 merged[inst.instrument_id.upper()] = inst
         for inst in self._instruments.search(query, limit=limit):
             merged[inst.instrument_id.upper()] = inst
-        return list(merged.values())[:limit]
+        ranked = sorted(merged.values(), key=lambda i: search_score(i, query))
+        return ranked[:limit]
 
     def get(self, instrument_id: str) -> Instrument:
         instrument = self._instruments.get(instrument_id)

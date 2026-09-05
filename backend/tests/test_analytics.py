@@ -68,7 +68,7 @@ class TestBaseline:
         assert b.sample_size == 25
 
 
-def make_signal(previous_price, current_price, current_volume, baseline, corporate=(), historical_volumes=()):
+def make_signal(previous_price, current_price, current_volume, baseline, corporate=(), historical_volumes=(), reference_price=None):
     from datetime import datetime, timezone
 
     instrument = build_instrument()
@@ -103,6 +103,7 @@ def make_signal(previous_price, current_price, current_volume, baseline, corpora
         historical_returns=[],
         historical_volumes=list(historical_volumes),
         corporate_events=list(corporate),
+        reference_price=reference_price,
     )
     return classify_change(
         evidence,
@@ -112,6 +113,21 @@ def make_signal(previous_price, current_price, current_volume, baseline, corpora
 
 
 class TestChangeDetector:
+    def test_session_open_reference_wins_over_previous_poll(self):
+        signal = make_signal(
+            previous_price=101.0,  # a five-minute polling observation
+            current_price=103.0,
+            reference_price=100.0,  # current session open
+            current_volume=1_000.0,
+            baseline=Baseline(
+                status=BaselineStatus.SUFFICIENT, mean=0.0, std=2.0, sample_size=20
+            ),
+        )
+        # Daily historical returns are compared to the same session interval,
+        # not to an arbitrary polling cadence.
+        assert signal.previous_price == 100.0
+        assert signal.return_pct == pytest.approx(3.0)
+
     def test_3820_3945_with_z_2_77_and_volume_2_4_classified_significant(self):
         # return 3.27%, z = 2.77 (SIGNIFICANT), volume ratio 2.4 (NOTABLE).
         signal = make_signal(

@@ -55,10 +55,8 @@ const noDataDetail: ChangeDetail = {
 
 function setup() {
   vi.mocked(useApis).mockReturnValue({
-    catchup: {
-      getInstrumentChange: vi.fn(async (id: string) =>
-        id === "tcs" ? tcsDetail : noDataDetail,
-      ),
+    watchlist: {
+      getMarketSnapshots: vi.fn(async () => [tcsDetail, noDataDetail]),
     },
   } as never);
 }

@@ -11,6 +11,8 @@ from app.api.schemas import (
     CatchupFeedOut,
     ChangeDetailOut,
     ChangeSignalOut,
+    ExploreItemOut,
+    ExploreOut,
     InstrumentOut,
     InstrumentSearchResultOut,
     MarketSnapshotOut,
@@ -22,6 +24,8 @@ from app.domain.entities import (
     CatchupFeed,
     ChangeDetail,
     ChangeSignal,
+    ExploreItem,
+    ExploreSections,
     Instrument,
     MarketSnapshot,
     UserRelevance,
@@ -112,6 +116,7 @@ def detail_out(detail: ChangeDetail, lookup: dict[str, Instrument]) -> ChangeDet
         ),
         other_signals=[signal_out(s, lookup) for s in detail.other_signals],
         last_checked_note=detail.last_checked_note,
+        market_status=detail.market_status.value if detail.market_status else None,
     )
 
 
@@ -141,6 +146,23 @@ def watchlist_out(watchlist: Watchlist) -> WatchlistOut:
 
 def search_result_out(inst: Instrument) -> InstrumentSearchResultOut:
     return InstrumentSearchResultOut(instrument=instrument_out(inst))
+
+
+def explore_item_out(item: ExploreItem, lookup: dict[str, Instrument]) -> ExploreItemOut:
+    return ExploreItemOut(
+        instrument=instrument_out(item.instrument),
+        snapshot=snapshot_out(item.snapshot) if item.snapshot else None,
+        signal=signal_out(item.signal, lookup) if item.signal else None,
+    )
+
+
+def explore_out(sections: ExploreSections, lookup: dict[str, Instrument]) -> ExploreOut:
+    return ExploreOut(
+        movers=[explore_item_out(i, lookup) for i in sections.movers],
+        dippers=[explore_item_out(i, lookup) for i in sections.dippers],
+        unusual=[explore_item_out(i, lookup) for i in sections.unusual],
+        sectors=sections.sectors,
+    )
 
 
 def instrument_lookup(instruments: list[Instrument]) -> dict[str, Instrument]:

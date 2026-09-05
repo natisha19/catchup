@@ -69,6 +69,9 @@ class MarketSnapshotRepository(Protocol):
 
     def get_latest(self, instrument_id: str) -> MarketSnapshot | None: ...
 
+    def get_latest_for(self, instrument_ids: list[str]) -> dict[str, MarketSnapshot]:
+        """Latest snapshot per instrument, keyed by instrument_id."""
+
     def get_by_id(self, snapshot_id: int) -> MarketSnapshot | None: ...
 
     def history(self, instrument_id: str, limit: int) -> list[MarketSnapshot]: ...

@@ -1,5 +1,5 @@
 import type { CatchupApi } from "../api/catchupApi";
-import type { ChangeDetail, CatchupFeed } from "../domain/types";
+import type { ChangeDetail, CatchupFeed, MarketStatus } from "../domain/types";
 import * as data from "./mockData";
 
 export type MockScenario = "default" | "firstVisit" | "marketClosed" | "noChanges" | "apiDown";
@@ -10,15 +10,23 @@ export function setMockScenario(s: MockScenario) {
   currentScenario = s;
 }
 
+const exchangeStatus: Record<string, MarketStatus> = {
+  NSE: "CLOSED",
+  NASDAQ: "CLOSED",
+  NYSE: "CLOSED",
+};
+
 export class MockCatchupApi implements CatchupApi {
   async getFeed(): Promise<CatchupFeed> {
     if (currentScenario === "apiDown") {
       return data.failure("Provider unreachable");
     }
-    if (currentScenario === "firstVisit") {
+    // Default is the honest new-user story: an empty watchlist, nothing to
+    // catch up on yet (spec §12).
+    if (currentScenario === "default" || currentScenario === "firstVisit") {
       return data.delay({
         lastCheckedAt: null,
-        marketStatus: "OPEN",
+        marketStatus: "CLOSED",
         lastMarketSessionAt: null,
         changes: [],
         unchangedCount: 0,
@@ -36,36 +44,21 @@ export class MockCatchupApi implements CatchupApi {
         unchangedCount: 1,
         providerStatus: "AVAILABLE",
         userRelevance: {
-          summary: "You seem to pay more attention to earnings and company events.",
-          topReasonCodes: ["EARNINGS_EVENT", "SIGNIFICANT_PRICE_MOVE"],
+          summary: data.relevanceSummary,
+          topReasonCodes: [],
         },
         acknowledgement: { tcs: 101, infy: 102 },
-      });
-    }
-    if (currentScenario === "noChanges") {
-      return data.delay({
-        lastCheckedAt: data.lastCheckedAt,
-        marketStatus: "OPEN",
-        lastMarketSessionAt: null,
-        changes: [],
-        unchangedCount: 12,
-        providerStatus: "AVAILABLE",
-        userRelevance: null,
-        acknowledgement: {},
       });
     }
     return data.delay({
       lastCheckedAt: data.lastCheckedAt,
       marketStatus: "OPEN",
       lastMarketSessionAt: null,
-      changes: data.signals,
-      unchangedCount: 1,
+      changes: [],
+      unchangedCount: 12,
       providerStatus: "AVAILABLE",
-      userRelevance: {
-        summary: "You seem to pay more attention to earnings and company events.",
-        topReasonCodes: ["EARNINGS_EVENT", "SIGNIFICANT_PRICE_MOVE"],
-      },
-      acknowledgement: { tcs: 101, infy: 102 },
+      userRelevance: null,
+      acknowledgement: {},
     });
   }
 
@@ -88,9 +81,10 @@ export class MockCatchupApi implements CatchupApi {
       instrument,
       snapshot,
       previousSeenPrice:
-        currentScenario === "firstVisit" ? null : (latestSignal?.previousPrice ?? instrumentId === "hdfcbank" ? 1698 : null),
+        currentScenario === "firstVisit" ? null : (latestSignal?.previousPrice ?? null),
       latestSignal,
       otherSignals: [],
+      marketStatus: exchangeStatus[instrument.exchange] ?? "UNKNOWN",
     });
   }
 

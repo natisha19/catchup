@@ -19,9 +19,17 @@ export class ApiError extends Error {
 }
 
 let sessionToken: string | undefined;
+const SESSION_STORAGE_KEY = "catchup.session.v1";
 
 export function setSessionToken(token: string | undefined): void {
   sessionToken = token;
+  try {
+    if (token) localStorage.setItem(SESSION_STORAGE_KEY, token);
+    else localStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch {
+    // Private browsing may not expose storage. The in-memory session still
+    // works for this page visit.
+  }
 }
 
 export function getSessionToken(): string | undefined {
@@ -33,22 +41,30 @@ export function getSessionToken(): string | undefined {
  * demo-grade: the backend signs {user_id, iat, exp} with a server secret. Used
  * only in http mode; mock mode never calls this.
  */
-export async function ensureSession(userId = "default-user"): Promise<boolean> {
+export async function ensureSession(): Promise<boolean> {
   if (!apiConfig.baseUrl || apiConfig.mode !== "http") {
     return false;
+  }
+  try {
+    const saved = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (saved) {
+      sessionToken = saved;
+      return true;
+    }
+  } catch {
+    // Continue by minting a short-lived in-memory session.
   }
   try {
     const res = await fetch(`${apiConfig.baseUrl}/auth/session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId }),
     });
     if (!res.ok) return false;
     const body = (await res.json()) as { token: string };
-    sessionToken = body.token;
+    setSessionToken(body.token);
     return true;
   } catch {
-    sessionToken = undefined;
+    setSessionToken(undefined);
     return false;
   }
 }

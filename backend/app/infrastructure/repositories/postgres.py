@@ -366,6 +366,24 @@ class MarketSnapshotRepo:
         ).scalar_one_or_none()
         return _to_snapshot(row) if row else None
 
+    def get_latest_for(self, instrument_ids: list[str]) -> dict[str, MarketSnapshot]:
+        if not instrument_ids:
+            return {}
+        rows = self._session.execute(
+            select(MarketSnapshotModel)
+            .where(MarketSnapshotModel.instrument_id.in_(instrument_ids))
+            .order_by(
+                MarketSnapshotModel.instrument_id,
+                MarketSnapshotModel.observed_at.desc(),
+                MarketSnapshotModel.id.desc(),
+            )
+        ).scalars().all()
+        latest: dict[str, MarketSnapshot] = {}
+        for r in rows:
+            if r.instrument_id not in latest:
+                latest[r.instrument_id] = _to_snapshot(r)
+        return latest
+
     def history(self, instrument_id: str, limit: int) -> list[MarketSnapshot]:
         rows = self._session.execute(
             select(MarketSnapshotModel)

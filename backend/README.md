@@ -116,8 +116,8 @@ VITE_API_MODE=http
 ```
 
 Frontend `VITE_API_MODE` values:
-- `mock` (default) — no backend needed; uses in-memory fixtures.
-- `http` — uses the real backend; `VITE_API_BASE_URL` must point at the API.
+- `mock` (default) — dev-only convenience; no backend needed, uses in-memory fixtures. Production builds refuse to start in this mode (CATCHUP won't silently serve fabricated market data).
+- `http` — uses the real backend; `VITE_API_BASE_URL` must point at the API. Required for production builds.
 
 ```bash
 cd catchup-frontend
@@ -145,7 +145,10 @@ python -m pytest tests/integration -v
 
 Covers: return/z-score/volume math, baseline sufficiency, classification,
 corporate-event visibility, per-user last-seen diffing, provider failure -> STALE,
-no-data -> UNAVAILABLE, idempotent ingestion, and the HTTP contract (camelCase).
+no-data -> UNAVAILABLE, idempotent ingestion, the HTTP contract (camelCase),
+sector-scoped explore queries, daily-vs-intraday baseline exclusion
+(partial in-progress sessions never enter the historical baseline), and the
+exchange-calendar "last completed session" boundary.
 
 Frontend:
 

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.analytics.thresholds import SignificanceThresholds
 from app.application.catchup_service import CatchupService
+from app.application.explore_service import ExploreService
 from app.application.ingestion_service import IngestionService
 from app.application.instrument_service import InstrumentService
 from app.application.watchlist_service import WatchlistService
@@ -117,6 +118,17 @@ def get_catchup_service(
 
 def get_thresholds() -> SignificanceThresholds:
     return SignificanceThresholds.from_settings(get_settings())
+
+
+def get_explore_service(
+    session: Annotated[Session, Depends(get_session)],
+) -> ExploreService:
+    return ExploreService(
+        instruments=InstrumentRepo(session),
+        snapshots=MarketSnapshotRepo(session),
+        signals=ChangeSignalRepo(session),
+        catalog=_catalog(),
+    )
 
 
 def get_ingestion_service(

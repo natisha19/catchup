@@ -11,7 +11,14 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.application.market_clock import IST, NseCalendar, market_status
+from app.application.market_clock import (
+    IST,
+    NY,
+    NseCalendar,
+    UsCalendar,
+    exchange_calendar,
+    market_status,
+)
 from app.domain.enums import MarketStatus
 
 UTC = timezone.utc
@@ -122,6 +129,27 @@ class TestPreviousSessionEnd:
         assert end.tzinfo is not None
 
 
+class TestLastCompletedSessionEnd:
+    """The baseline boundary: an in-progress session must NOT count as a
+    completed historical day (daily-vs-intraday distinction)."""
+
+    def test_during_session_refers_to_previous_day_close(self):
+        end = NseCalendar().last_completed_session_end(ist(9, 7, 10, 0))
+        assert end == ist(9, 4, 15, 30)  # Friday close, not today's running session
+
+    def test_after_close_includes_today(self):
+        end = NseCalendar().last_completed_session_end(ist(9, 7, 16, 0))
+        assert end == ist(9, 7, 15, 30)
+
+    def test_pre_open_refers_to_previous_day_close(self):
+        end = NseCalendar().last_completed_session_end(ist(9, 7, 8, 0))
+        assert end == ist(9, 4, 15, 30)
+
+    def test_weekend_refers_to_friday_close(self):
+        end = NseCalendar().last_completed_session_end(ist(9, 12, 12, 0))
+        assert end == ist(9, 11, 15, 30)
+
+
 class TestMarketStatus:
     def test_open_during_session_with_recent_observation(self):
         now = ist(9, 7, 10, 0)
@@ -158,3 +186,52 @@ class TestMarketStatus:
         # only assert the enum is one of the three values, never raises.
         status = market_status(utc(ist(9, 7, 10, 0)))
         assert status in (MarketStatus.OPEN, MarketStatus.CLOSED)
+
+
+class TestUsCalendar:
+    """Spec §16: market status must not be hardcoded to NSE — US sessions use
+    their own 09:30–16:00 America/New_York window."""
+
+    def ny(self, hour, minute=0):
+        return datetime(2026, 9, 7, hour, minute, tzinfo=NY)
+
+    def test_open_during_us_morning_session(self):
+        assert UsCalendar().is_session_open(self.ny(9, 30)) is True
+
+    def test_open_during_us_late_session(self):
+        assert UsCalendar().is_session_open(self.ny(15, 59)) is True
+
+    def test_closed_before_us_open(self):
+        assert UsCalendar().is_session_open(self.ny(9, 29)) is False
+
+    def test_closed_after_us_close(self):
+        assert UsCalendar().is_session_open(self.ny(16, 0)) is False
+
+    def test_closed_on_us_weekend(self):
+        saturday = datetime(2026, 9, 12, 12, 0, tzinfo=NY)
+        assert UsCalendar().is_session_open(saturday) is False
+
+    def test_closed_on_us_holiday(self):
+        christmas = datetime(2026, 12, 25, 12, 0, tzinfo=NY)
+        assert UsCalendar().is_session_open(christmas) is False
+
+    def test_exchange_aware_market_status(self):
+        # 20:00 IST is 10:30 ET: US open, NSE closed — one observation time, two
+        # different exchange-calendar answers.
+        observed = utc(ist(9, 7, 10, 0))
+        evening = utc(ist(9, 7, 20, 0))
+        assert market_status(observed, now=evening, exchange="NASDAQ") is MarketStatus.OPEN
+        assert market_status(observed, now=evening, exchange="NYSE") is MarketStatus.OPEN
+        assert market_status(observed, now=evening, exchange="NSE") is MarketStatus.CLOSED
+
+    def test_unknown_exchange_defaults_to_nse(self):
+        morning = utc(ist(9, 7, 10, 0))
+        assert market_status(morning, now=utc(ist(9, 7, 10, 0)), exchange="LSE") is MarketStatus.OPEN
+
+    def test_exchange_calendar_registry(self):
+        first = exchange_calendar("NYSE")
+        second = exchange_calendar("NYSE")
+        assert first is second  # shared instance, deterministic
+        assert isinstance(exchange_calendar("NASDAQ"), UsCalendar)
+        assert isinstance(exchange_calendar(None), NseCalendar)
+        assert isinstance(exchange_calendar("BSE"), NseCalendar)

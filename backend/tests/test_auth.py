@@ -2,7 +2,7 @@
 
 The API is built around a single default user, so unauthenticated requests fall
 back to DEFAULT_USER_ID unless AUTH_REQUIRED is on. A Bearer token minted by
-POST /auth/session makes the request act as that signed identity instead.
+POST /auth/session makes the request act as a server-generated signed identity.
 """
 
 from __future__ import annotations
@@ -105,24 +105,20 @@ class TestSessionTokens:
 
 
 class TestAuthApi:
-    def test_create_session_default_user(self, auth_client):
+    def test_create_session_generates_opaque_user(self, auth_client):
         resp = auth_client.post("/auth/session", json={})
         assert resp.status_code == 201
         body = resp.json()
-        assert body["user_id"] == DEFAULT_USER_ID
+        assert body["user_id"].startswith("anon_")
         assert body["token"]
         assert isinstance(body["expires_at"], int)
 
-    def test_create_session_named_user(self, auth_client):
+    def test_create_session_does_not_accept_client_selected_identity(self, auth_client):
         resp = auth_client.post("/auth/session", json={"user_id": "alice"})
         assert resp.status_code == 201
         body = resp.json()
-        assert body["user_id"] == "alice"
-        assert verify_session(body["token"]) == "alice"
-
-    def test_create_session_rejects_blank(self, auth_client):
-        resp = auth_client.post("/auth/session", json={"user_id": "   "})
-        assert resp.status_code == 422
+        assert body["user_id"] != "alice"
+        assert verify_session(body["token"]) == body["user_id"]
 
     def test_me_falls_back_to_default_user(self, auth_client):
         resp = auth_client.get("/auth/me")
@@ -130,27 +126,21 @@ class TestAuthApi:
         assert resp.json()["user_id"] == DEFAULT_USER_ID
 
     def test_me_with_bearer_token(self, auth_client):
-        token = auth_client.post(
-            "/auth/session", json={"user_id": "alice"}
-        ).json()["token"]
+        token = auth_client.post("/auth/session").json()["token"]
         resp = auth_client.get(
             "/auth/me", headers={"Authorization": f"Bearer {token}"}
         )
         assert resp.status_code == 200
-        assert resp.json()["user_id"] == "alice"
+        assert resp.json()["user_id"].startswith("anon_")
 
     def test_me_with_x_catchup_session_header(self, auth_client):
-        token = auth_client.post(
-            "/auth/session", json={"user_id": "alice"}
-        ).json()["token"]
+        token = auth_client.post("/auth/session").json()["token"]
         resp = auth_client.get("/auth/me", headers={"X-Catchup-Session": token})
         assert resp.status_code == 200
-        assert resp.json()["user_id"] == "alice"
+        assert resp.json()["user_id"].startswith("anon_")
 
     def test_me_with_tampered_token_falls_back(self, auth_client):
-        token = auth_client.post(
-            "/auth/session", json={"user_id": "alice"}
-        ).json()["token"]
+        token = auth_client.post("/auth/session").json()["token"]
         body = token.split(".")[1]
         flipped = ("A" if body[0] != "A" else "B") + body[1:]
         resp = auth_client.get(

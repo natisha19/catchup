@@ -7,9 +7,10 @@
  */
 
 import type { CatchupApi } from "./catchupApi";
+import type { ExploreApi } from "./exploreApi";
 import type { InstrumentApi, WatchlistApi } from "./watchlistApi";
 import { httpJson } from "./clients";
-import type { ChangeDetail, CatchupFeed, Watchlist } from "../domain/types";
+import type { ChangeDetail, CatchupFeed, Explore, Watchlist } from "../domain/types";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -39,6 +40,10 @@ export class HttpWatchlistApi implements WatchlistApi {
     return httpJson<Watchlist>("/watchlists/me");
   }
 
+  async getMarketSnapshots(): Promise<ChangeDetail[]> {
+    return httpJson<ChangeDetail[]>("/watchlists/me/snapshots");
+  }
+
   async addInstrument(instrumentId: string, symbol?: string): Promise<void> {
     const body: { instrumentId?: string; symbol?: string } = {};
     if (instrumentId) body.instrumentId = instrumentId;
@@ -63,5 +68,15 @@ export class HttpInstrumentApi implements InstrumentApi {
     return httpJson<{ instrument: import("../domain/types").Instrument }[]>(
       `/instruments/search?q=${q}`,
     );
+  }
+}
+
+export class HttpExploreApi implements ExploreApi {
+  async getExplore(limit?: number, sector?: string): Promise<Explore> {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", String(limit));
+    if (sector) params.set("sector", sector);
+    const qs = params.toString();
+    return httpJson<Explore>(`/instruments/explore${qs ? `?${qs}` : ""}`);
   }
 }

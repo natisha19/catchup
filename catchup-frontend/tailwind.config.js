@@ -1,27 +1,39 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: "class",
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        ink: { DEFAULT: "#111827", soft: "#3F4A5C", muted: "#667085" },
-        paper: "#F7F8FA",
-        line: "#E5E7EB",
-        card: "#FFFFFF",
-        // CATCHUP accent — used sparingly, never as the dominant color.
-        accent: { DEFAULT: "#F59E0B", soft: "#FFF8E6", line: "#FDE68A" },
-        signal: {
-          critical: "#DC2626",
-          significant: "#B45309",
-          notable: "#175CD3",
-          normal: "#475467",
+        // Every color is a CSS variable token (see src/app/providers/theme.css).
+        // Light and dark values live there; Tailwind only wires class -> token.
+        // Theme is a presentational concern — no component hardcodes colors or
+        // sprinkles `dark:` variants, so dark mode cannot diverge page logic.
+        ink: "rgb(var(--color-ink) / <alpha-value>)",
+        "ink-soft": "rgb(var(--color-ink-soft) / <alpha-value>)",
+        "ink-muted": "rgb(var(--color-ink-muted) / <alpha-value>)",
+        paper: "rgb(var(--color-paper) / <alpha-value>)",
+        line: "rgb(var(--color-line) / <alpha-value>)",
+        card: "rgb(var(--color-card) / <alpha-value>)",
+        // Contrast text placed on `ink` (inverted in dark mode).
+        onink: "rgb(var(--color-onink) / <alpha-value>)",
+        accent: {
+          DEFAULT: "rgb(var(--color-accent) / <alpha-value>)",
+          soft: "rgb(var(--color-accent-soft) / <alpha-value>)",
+          line: "rgb(var(--color-accent-line) / <alpha-value>)",
         },
-        up: "#16A34A",
-        upsoft: "#F0FDF4",
-        upline: "#BBF7D0",
-        down: "#DC2626",
-        downsoft: "#FEF2F2",
-        downline: "#FECACA",
+        signal: {
+          critical: "rgb(var(--color-signal-critical) / <alpha-value>)",
+          significant: "rgb(var(--color-signal-significant) / <alpha-value>)",
+          notable: "rgb(var(--color-signal-notable) / <alpha-value>)",
+          normal: "rgb(var(--color-signal-normal) / <alpha-value>)",
+        },
+        up: "rgb(var(--color-up) / <alpha-value>)",
+        upsoft: "rgb(var(--color-up-soft) / <alpha-value>)",
+        upline: "rgb(var(--color-up-line) / <alpha-value>)",
+        down: "rgb(var(--color-down) / <alpha-value>)",
+        downsoft: "rgb(var(--color-down-soft) / <alpha-value>)",
+        downline: "rgb(var(--color-down-line) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],

@@ -1,7 +1,8 @@
-import type { Instrument, Watchlist } from "../domain/types";
+import type { ChangeDetail, Instrument, Watchlist } from "../domain/types";
 
 export interface WatchlistApi {
   getWatchlist(): Promise<Watchlist>;
+  getMarketSnapshots(): Promise<ChangeDetail[]>;
   /**
    * Add an instrument to the watchlist.
    * `instrumentId` references an already-known instrument; `symbol` allows the

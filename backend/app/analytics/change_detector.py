@@ -11,8 +11,8 @@ this testable in isolation from any database or provider.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from app.analytics import anomaly, returns, volume
 from app.analytics.baseline import Baseline
@@ -40,6 +40,11 @@ class ChangeEvidence:
     historical_returns: list[float]
     historical_volumes: list[float]
     corporate_events: list[CorporateEvent]
+    # Optional, like-for-like reference price for the return calculation.  The
+    # ingestion path supplies the current session open, which is comparable to
+    # the daily close-to-close return baseline.  ``previous`` remains useful
+    # for audit links and for callers that do not have an interval reference.
+    reference_price: float | None = None
 
 
 def classify_change(
@@ -53,7 +58,9 @@ def classify_change(
 
     # --- current return vs previous state -------------------------------
     current_price = current.price
-    previous_price = previous.price if previous is not None else None
+    previous_price = evidence.reference_price
+    if previous_price is None:
+        previous_price = previous.price if previous is not None else None
     return_pct = None
     if current_price is not None and previous_price is not None and previous_price > 0:
         return_pct = returns.percent_return(previous_price, current_price)

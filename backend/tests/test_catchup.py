@@ -13,6 +13,7 @@ from app.domain.entities import (
 from app.domain.enums import (
     ChangeEventType,
     DataStatus,
+    MarketStatus,
     SignificanceTier,
 )
 from app.relevance.ranking import RuleBasedRelevanceRanker
@@ -294,3 +295,63 @@ def test_mark_seen_uses_delivered_snapshot_watermark_not_newer_snapshot():
     svc.mark_seen("default-user", snapshot_ids={"TCS": 2})
 
     assert last_seen.get("default-user", "TCS").last_seen_snapshot_id == 2
+
+
+class TestPerInstrumentMarketStatus:
+    """Spec §16: the stock detail carries the instrument's OWN exchange status,
+    never the feed's global one. Wired to the exchange-aware clock."""
+
+    def test_detail_uses_instrument_exchange(self, monkeypatch):
+        instruments = FakeInstrumentRepo()
+        instruments.add(build_instrument("AMD", "AMD", "Advanced Micro Devices", exchange="NASDAQ"))
+        snapshots = FakeMarketSnapshotRepo()
+        snapshots.save(make_snapshot("AMD", T1, 150.0, 1))
+        watchlists = FakeWatchlistRepo(instruments)
+        watchlists.add_item("sel", "AMD")
+        svc = build_service(
+            snapshots=snapshots,
+            watchlists=watchlists,
+            instruments=instruments,
+        )
+
+        seen = {}
+
+        def fake_market_status(observed_at, *, exchange=None, **kwargs):
+            seen["exchange"] = exchange
+            seen["observed"] = observed_at
+            return MarketStatus.CLOSED
+
+        monkeypatch.setattr(
+            "app.application.catchup_service.market_status", fake_market_status
+        )
+        detail = svc.get_instrument_change("sel", "AMD")
+
+        assert seen.get("exchange") == "NASDAQ"
+        assert seen.get("observed") is not None
+        assert detail.market_status is MarketStatus.CLOSED
+
+    def test_market_status_is_unknown_without_snapshot(self):
+        instruments = FakeInstrumentRepo()
+        instruments.add(build_instrument("AMD", "AMD", "Advanced Micro Devices", exchange="NASDAQ"))
+        watchlists = FakeWatchlistRepo(instruments)
+        watchlists.add_item("sel", "AMD")
+        svc = build_service(watchlists=watchlists, instruments=instruments)
+
+        detail = svc.get_instrument_change("sel", "AMD")
+
+        assert detail.market_status is MarketStatus.UNKNOWN
+
+
+class TestNewUserStartsEmpty:
+    def test_fresh_user_watchlist_is_empty(self):
+        instruments = FakeInstrumentRepo()
+        watchlists = FakeWatchlistRepo(instruments)
+        svc = build_service(watchlists=watchlists, instruments=instruments)
+
+        feed = svc.get_feed("brand-new-user")
+
+        # No pre-populated stocks, no fabricated changes, no personalisation.
+        assert watchlists.get_items("brand-new-user").items == []
+        assert feed.changes == []
+        assert feed.user_relevance is None
+        assert feed.acknowledgement == {}

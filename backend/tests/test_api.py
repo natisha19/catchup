@@ -274,9 +274,9 @@ class TestCatchupApi:
     def test_get_instrument_change_404_for_unknown(self, client):
         assert client.get("/catchup/UNKNOWN").status_code == 404
 
-    def test_mark_seen_returns_204(self, client):
+    def test_mark_seen_returns_200(self, client):
         resp = client.post("/catchup/mark-seen")
-        assert resp.status_code == 204
+        assert resp.status_code == 200
 
 
 class TestWatchlistApi:
@@ -288,6 +288,14 @@ class TestWatchlistApi:
         assert "updatedAt" in body
         assert len(body["items"]) == 1
         assert body["items"][0]["baselineStatus"] in ("READY", "INSUFFICIENT")
+
+    def test_get_market_snapshots_is_one_batched_contract(self, client):
+        resp = client.get("/watchlists/me/snapshots")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 1
+        assert body[0]["instrument"]["instrumentId"] == "TCS"
+        assert body[0]["snapshot"]["price"] == 110.0
 
     def test_add_item(self, client):
         client.post("/watchlists/me/items", json={"instrument_id": "INFY"})

@@ -138,6 +138,87 @@ _SUFFIX_EXCHANGES = {
     "US": "NASDAQ",
 }
 
+# Bounded, curated discovery universe: the instruments the ingestion worker keeps
+# fresh REGARDLESS of watchlists, so the Explore page can surface real movers,
+# dippers and unusual activity even for a brand-new user with an empty watchlist.
+# It is deliberately small (provider capacity is bounded) but covers every sector
+# with at least two representatives where the catalog allows, so "by sector"
+# browsing and the per-sector Explore query stay meaningful. Symbols must exist
+# in _CATALOG.
+DISCOVERY_SYMBOLS: frozenset[str] = frozenset(
+    {
+        # Financials
+        "SBIN",
+        "HDFCBANK",
+        "ICICIBANK",
+        # IT
+        "TCS",
+        "INFY",
+        "HCLTECH",
+        # Energy
+        "RELIANCE",
+        "ONGC",
+        # Consumer Staples
+        "ITC",
+        "HINDUNILVR",
+        # Telecom
+        "BHARTIARTL",
+        # Industrials
+        "LT",
+        # Consumer Discretionary
+        "MARUTI",
+        "TITAN",
+        "ASIANPAINT",
+        # Healthcare
+        "SUNPHARMA",
+        "DRREDDY",
+        "CIPLA",
+        # Utilities
+        "NTPC",
+        "POWERGRID",
+        # Materials
+        "GRASIM",
+        "TATASTEEL",
+        # Technology
+        "AAPL",
+        "NVDA",
+        # Communication Services
+        "META",
+    }
+)
+
+
+def search_score(inst: Instrument, query: str) -> tuple[int, str]:
+    """Relevance score for ranking search results consistently across catalog
+    and persisted instruments.
+
+    Lower tuple is better: exact symbol/provider/id match first, then symbol /
+    id prefix, then provider prefix, then name prefix, then substring matches.
+    The secondary key keeps ties deterministic (alphabetical by symbol).
+    """
+    symbol = (inst.symbol or "").upper()
+    instrument_id = (inst.instrument_id or "").upper()
+    provider = (inst.provider_symbol or "").upper()
+    name = inst.company_name.upper()
+    q = (query or "").strip().upper()
+    if symbol == q or instrument_id == q or provider == q:
+        return (0, symbol)
+    if instrument_id.startswith(q):
+        return (1, instrument_id)
+    if symbol.startswith(q):
+        return (1, symbol)
+    if provider.startswith(q):
+        return (2, provider)
+    if name.startswith(q):
+        return (3, name)
+    if q in symbol:
+        return (4, symbol)
+    if q in provider:
+        return (5, provider)
+    if q in name:
+        return (6, name)
+    return (9, symbol)
+
 
 class InstrumentCatalog:
     """Static, curated symbol -> instrument resolver (no network access)."""
@@ -194,24 +275,38 @@ class InstrumentCatalog:
         return None
 
     def search(self, query: str, limit: int = 20) -> list[Instrument]:
-        """Case-insensitive partial search over symbol, name, and provider ticker."""
+        """Case-insensitive partial search over symbol, name, and provider ticker.
+
+        Ranked with ``search_score``: exact symbol / id first, then prefixes,
+        then substring matches (spec: "search first shows the exact symbol when
+        it exists").
+        """
         q = (query or "").strip().upper()
         if not q:
             return []
         hits: dict[str, Instrument] = {}
-        for instrument_id, inst in self._entries.items():
+        for inst in self._entries.values():
             if (
-                q in instrument_id
+                q in inst.instrument_id
                 or q in inst.company_name.upper()
                 or (inst.provider_symbol and q in inst.provider_symbol.upper())
                 or (inst.symbol and q in inst.symbol.upper())
             ):
-                hits[instrument_id] = inst
-        # Aliased names also surface their canonical instrument.
+                hits[inst.instrument_id] = inst
+        # Aliased names (SBI -> SBIN) also surface their canonical instrument.
         for alias, instrument_id in self._aliases.items():
             if q in alias and instrument_id not in hits and instrument_id in self._entries:
                 hits[instrument_id] = self._entries[instrument_id]
-        return [hits[k] for k in sorted(hits)][:limit]
+        ranked = sorted(hits.values(), key=lambda i: search_score(i, q))
+        return ranked[:limit]
+
+    def discovery_instruments(self) -> list[Instrument]:
+        """Instruments in the curated discovery universe (catalog order).
+
+        These are the symbols the ingestion worker keeps fresh for Explore,
+        independent of any user's watchlist.
+        """
+        return [self._entries[s] for s in DISCOVERY_SYMBOLS if s in self._entries]
 
 
 def _instrument_rows() -> list[Instrument]:

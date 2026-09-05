@@ -5,26 +5,25 @@ import { useApis } from "../hooks/useApis";
 import { Spinner } from "../components/common/Spinner";
 import { ErrorState } from "../components/common/ErrorState";
 import { SnapshotHeader } from "../components/market/SnapshotHeader";
+import { DayRangeBar } from "../components/market/DayRangeBar";
 import { WhyPanel } from "../components/catchup/WhyPanel";
 import { RawDataPanel } from "../components/catchup/RawDataPanel";
 import { ChangeCard } from "../components/catchup/ChangeCard";
 import { formatLastChecked } from "../utils/date";
-import { getMarketStatus, rememberMarketStatus } from "../domain/marketStatusCache";
+import { rememberMarketStatus } from "../domain/marketStatusCache";
 
 export function StockDetailPage() {
   const { instrumentId = "" } = useParams();
   const { catchup } = useApis();
   const detail = useAsync(() => catchup.getInstrumentChange(instrumentId), [instrumentId]);
-  // Market status is not part of the snapshot payload; reuse the existing feed
-  // so the freshness label can distinguish "market closed + latest session"
-  // from genuinely stale data. Fall back to the cached status so "Latest
-  // session data" never flickers to "Stale data" while the feed is resolving.
-  const feed = useAsync(() => catchup.getFeed(), []);
 
-  const resolvedFeed = feed.status === "success" ? feed.data : null;
+  const resolved = detail.status === "success" ? detail.data : null;
+  // The detail now carries its own per-exchange status (spec §16); remember it
+  // app-wide so the freshness label never flickers between statuses.
+  const marketStatus = resolved?.marketStatus ?? undefined;
   useEffect(() => {
-    if (resolvedFeed) rememberMarketStatus(resolvedFeed.marketStatus);
-  }, [resolvedFeed]);
+    if (marketStatus) rememberMarketStatus(marketStatus);
+  }, [marketStatus]);
 
   if (detail.status === "loading") return (
     <div className="flex min-h-[40vh] items-center justify-center"><Spinner label="Loading stock" /></div>
@@ -35,13 +34,13 @@ export function StockDetailPage() {
 
   const { data } = detail;
   const s = data.latestSignal;
-  const marketStatus =
-    feed.status === "success" ? feed.data.marketStatus : getMarketStatus();
+  const snap = data.snapshot;
+  const previousPrice = s?.previousPrice ?? data.previousSeenPrice ?? null;
 
   return (
     <div className="space-y-6">
       <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-ink-muted transition-colors hover:text-ink">
-        <span aria-hidden>←</span> Back to feed
+        <span aria-hidden>←</span> Back to explore
       </Link>
 
       <SnapshotHeader
@@ -61,13 +60,35 @@ export function StockDetailPage() {
               What changed?
             </h2>
             <p className="mt-2 text-lg font-medium text-ink">{s.eventDescription}</p>
+            {s.reasonCodes.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {s.reasonCodes.map((r) => (
+                  <span
+                    key={r}
+                    className="inline-flex items-center rounded-full bg-paper px-2.5 py-0.5 text-[11px] font-medium text-ink-soft ring-1 ring-inset ring-line"
+                  >
+                    {r.replace(/_/g, " ")}
+                  </span>
+                ))}
+              </div>
+            )}
+            {snap?.high != null && snap.low != null && snap.price != null && (
+              <div className="mt-4 max-w-xs">
+                <p className="mb-1.5 text-xs text-ink-muted">Where the day&apos;s range sits — real snapshot:</p>
+                <DayRangeBar low={snap.low} high={snap.high} current={snap.price} open={snap.open ?? null} />
+              </div>
+            )}
           </section>
           <WhyPanel signal={s} />
         </>
       ) : (
         <section className="card p-5">
           <h2 className="eyebrow">What changed?</h2>
-          <p className="mt-2 text-sm text-ink-muted">No significant changes since you last checked.</p>
+          <p className="mt-2 text-sm text-ink-muted">
+            {previousPrice !== null
+              ? "No significant changes since you last checked."
+              : "Baseline being established. Catchup will remember today's snapshot for next time."}
+          </p>
         </section>
       )}
 

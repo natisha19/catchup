@@ -19,6 +19,7 @@ from app.domain.enums import (
     ProviderFailure,
     SignificanceTier,
 )
+from app.market_data.catalog import DISCOVERY_SYMBOLS, default_catalog
 from app.market_data.data_types import (
     HistoricalData,
     MarketSnapshotCandidate,
@@ -232,7 +233,9 @@ class TestQuoteEnrichSplit:
         assert result.signals == 1
         sig = signals.get_latest("TCS")
         assert sig is not None
-        assert sig.previous_price == 100.0
+        # The provider candidate carries a session-open reference; enrichment
+        # uses it so the intraday move is comparable with daily history.
+        assert sig.previous_price == 103.0
         assert sig.current_price == 103.0
         # previous_snapshot_id points at the PRIOR snapshot, not the current one.
         assert sig.previous_snapshot_id != sig.current_snapshot_id
@@ -319,3 +322,148 @@ class TestQuoteEnrichSplit:
         assert elapsed < 0.55, f"serial fetch would take ~0.6s, got {elapsed:.2f}s"
         assert snapshots.count_for_instrument("TCS") == 1
         assert snapshots.count_for_instrument("INFY") == 1
+
+
+class TestDailyVsIntradayBaseline:
+    """A partial current trading day must never enter the historical baseline
+    (daily-vs-intraday distinction): live bars are not completed history."""
+
+    def _trailing_daily_rows(self):
+        """20 weekday bars ending Friday 2026-09-04 (prices start 100, gently
+        jagged) plus a partial Monday 2026-09-07 row with a huge live move."""
+        from datetime import date, timedelta
+
+        rows = []
+        day = date(2026, 9, 4)
+        count = 0
+        while count < 20:
+            if day.weekday() < 5:
+                rows.append(
+                    HistoricalData(
+                        observed_at=datetime(day.year, day.month, day.day, 10, 0, tzinfo=timezone.utc),
+                        price=100.0 + count // 2,
+                        close=100.0 + count // 2,
+                        volume=1_000.0,
+                    )
+                )
+                count += 1
+            day -= timedelta(days=1)
+        rows.reverse()
+        rows.append(
+            HistoricalData(
+                observed_at=datetime(2026, 9, 7, 6, 0, tzinfo=timezone.utc),  # in-session Monday
+                price=1_200.0,
+                close=1_200.0,
+                volume=9_000.0,
+            )
+        )
+        return rows
+
+    def build(self, clock):
+        instruments = FakeInstrumentRepo()
+        inst = build_instrument()
+        instruments.add(inst)
+        snapshots = FakeMarketSnapshotRepo()
+        snapshots.save(build_snapshot("TCS", datetime(2024, 1, 1, tzinfo=timezone.utc), 100.0))
+        signals = FakeChangeSignalRepo()
+        provider = FakeProvider(
+            snapshots={"TCS": make_candidate(121.0, 50_000)},
+            history=self._trailing_daily_rows(),
+        )
+        svc = IngestionService(
+            provider=provider,
+            instruments=instruments,
+            snapshots=snapshots,
+            events=FakeCorporateEventRepo(),
+            signals=signals,
+            thresholds=SignificanceThresholds.defaults(),
+            baseline_window_days=30,
+            min_baseline_returns=20,
+            limited_baseline_returns=5,
+            clock=lambda: clock,
+        )
+        svc.ingest(["TCS"])
+        return signals.get_latest("TCS")
+
+    def test_in_session_partial_day_is_excluded_from_baseline(self):
+        monday_930_ist = datetime(2026, 9, 7, 4, 0, tzinfo=timezone.utc)  # 09:30 IST
+        signal = self.build(monday_930_ist)
+
+        assert signal is not None
+        assert signal.baseline_std is not None
+        # 19 completed returns of ~±0.8%: a small, sensible dispersion. The
+        # +900% live move must NOT have inflated it.
+        assert signal.baseline_std < 5.0
+
+    def test_after_close_completed_day_is_included(self):
+        monday_1730_ist = datetime(2026, 9, 7, 12, 0, tzinfo=timezone.utc)  # 17:30 IST
+        during = self.build(datetime(2026, 9, 7, 4, 0, tzinfo=timezone.utc))
+        after = self.build(monday_1730_ist)
+
+        assert during is not None and after is not None
+        assert during.baseline_std is not None and after.baseline_std is not None
+        assert after.baseline_std > during.baseline_std * 5
+
+
+class TestDiscoveryUniverse:
+    """Spec §1–§3: Explore data must exist even for a brand-new user with an
+    empty watchlist, so the ingestion pass keeps the curated discovery universe
+    fresh independent of what anyone watches."""
+
+    def test_quote_ingests_discovery_universe_with_empty_watchlist(self):
+        instruments = FakeInstrumentRepo()  # empty active set: no watchlist yet
+        snapshots = FakeMarketSnapshotRepo()
+        signals = FakeChangeSignalRepo()
+        provider = FakeProvider(snapshots={"TCS": make_candidate(3600.0, 1_000_000)})
+        svc = IngestionService(
+            provider=provider,
+            instruments=instruments,
+            snapshots=snapshots,
+            events=FakeCorporateEventRepo(),
+            signals=signals,
+            thresholds=SignificanceThresholds.defaults(),
+            baseline_window_days=30,
+            min_baseline_returns=20,
+            limited_baseline_returns=5,
+            catalog=default_catalog(),
+        )
+
+        result = svc.quote()
+
+        assert result.instruments == len(DISCOVERY_SYMBOLS)
+        # Discovery rows are persisted idempotently even with no watchlist.
+        assert instruments.get("TCS") is not None
+        snapshot = snapshots.get_latest("TCS")
+        assert snapshot is not None and snapshot.price == 3600.0
+
+    def test_discovery_universe_is_bounded(self):
+        assert len(DISCOVERY_SYMBOLS) <= 25
+        # Every discovery symbol must actually exist in the curated catalog.
+        for symbol in DISCOVERY_SYMBOLS:
+            assert default_catalog().resolve_exact(symbol) is not None
+
+    def test_explicit_ids_are_not_supplemented_by_discovery(self):
+        """An explicit instrument_ids pass stays scoped — waiting/one-off runs
+        must not unexpectedly widen to the discovery universe."""
+        instruments = FakeInstrumentRepo()
+        snapshots = FakeMarketSnapshotRepo()
+        signals = FakeChangeSignalRepo()
+        provider = FakeProvider(snapshots={"TCS": make_candidate(3600.0, 1_000_000)})
+        svc = IngestionService(
+            provider=provider,
+            instruments=instruments,
+            snapshots=snapshots,
+            events=FakeCorporateEventRepo(),
+            signals=signals,
+            thresholds=SignificanceThresholds.defaults(),
+            baseline_window_days=30,
+            min_baseline_returns=20,
+            limited_baseline_returns=5,
+            catalog=default_catalog(),
+        )
+        instruments.add(build_instrument("TCS"))
+
+        result = svc.quote(["TCS"])
+
+        assert result.instruments == 1
+        assert instruments.get("RELIANCE") is None

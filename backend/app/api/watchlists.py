@@ -11,14 +11,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import get_user_id, get_watchlist_service
-from app.api.mappers import watchlist_out
+from app.api.deps import get_catchup_service, get_user_id, get_watchlist_service
+from app.api.mappers import detail_out, instrument_lookup, watchlist_out
 from app.api.schemas import (
     AddItemRequest,
+    ChangeDetailOut,
     CreateWatchlistRequest,
     WatchlistOut,
     WatchlistSummaryOut,
 )
+from app.application.catchup_service import CatchupService
 from app.application.instrument_service import InstrumentNotFoundError
 from app.application.watchlist_service import (
     DuplicateWatchlistItemError,
@@ -53,6 +55,20 @@ def get_my_watchlist(
     service: Annotated[WatchlistService, Depends(get_watchlist_service)],
 ) -> WatchlistOut:
     return watchlist_out(service.get(user_id))
+
+
+@router.get("/me/snapshots", response_model=list[ChangeDetailOut])
+def get_my_watchlist_snapshots(
+    user_id: Annotated[str, Depends(get_user_id)],
+    catchup: Annotated[CatchupService, Depends(get_catchup_service)],
+) -> list[ChangeDetailOut]:
+    """One dashboard request for all currently watched market snapshots."""
+    instruments = catchup.watchlist_instruments(user_id)
+    lookup = instrument_lookup(instruments)
+    return [
+        detail_out(detail, lookup)
+        for detail in catchup.get_watchlist_snapshot_details(user_id)
+    ]
 
 
 @router.post("/me/items", status_code=status.HTTP_201_CREATED)

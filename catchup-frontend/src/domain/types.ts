@@ -89,6 +89,23 @@ export interface ChangeDetail {
   otherSignals: ChangeSignal[];
   /** When the user last saw this instrument (ISO string), from the backend. */
   lastCheckedNote?: string | null;
+  /** Per-instrument exchange-calendar status (spec §16). */
+  marketStatus?: MarketStatus | null;
+}
+
+export interface ExploreItem {
+  instrument: Instrument;
+  snapshot: MarketSnapshot | null;
+  signal: ChangeSignal | null;
+}
+
+/** Discovery feed backing the Explore page (spec §3). */
+export interface Explore {
+  movers: ExploreItem[];
+  dippers: ExploreItem[];
+  unusual: ExploreItem[];
+  /** Distinct sectors present in the discovery universe. */
+  sectors: string[];
 }
 
 export interface CatchupFeed {

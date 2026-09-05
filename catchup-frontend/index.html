@@ -4,6 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#F7F8FA" />
+    <script>
+      // Apply the saved (or system) theme before first paint to avoid a flash.
+      (function () {
+        try {
+          var stored = localStorage.getItem("catchup-theme");
+          var dark =
+            stored === "dark" ||
+            (stored !== "light" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (dark) {
+            document.documentElement.classList.add("dark");
+            if (meta) meta.setAttribute("content", "#0F172A");
+          }
+        } catch (e) {
+          /* storage unavailable — defaults to light */
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

@@ -122,15 +122,27 @@ class YahooFinanceProvider(MarketDataProvider):
                 when.to_pydatetime() if hasattr(when, "to_pydatetime") else when
             )
             price = _to_float(bar.get("Close"))
+            # Current volume is the session's cumulative volume, not the last
+            # minute-bar's share. The baseline volume is a daily average, so a
+            # comparable numerator is what makes the volume ratio meaningful
+            # ("today's run-rate vs a typical full session").
+            cumulative_volume = _to_float(bars["Volume"].sum(axis=0)) if "Volume" in bars else None
             info = _ticker_info(ticker)
+            # These are session values, rather than the final minute-bar's
+            # OHLC.  In particular, session open lets the classifier compare a
+            # session return against its daily-return baseline without mixing
+            # five-minute and daily intervals.
+            session_open = _to_float(bars.iloc[0].get("Open"))
+            session_high = _to_float(bars["High"].max()) if "High" in bars else None
+            session_low = _to_float(bars["Low"].min()) if "Low" in bars else None
             return MarketSnapshotCandidate(
                 observed_at=observed_at,
                 price=price,
-                open=_to_float(bar.get("Open")),
-                high=_to_float(bar.get("High")),
-                low=_to_float(bar.get("Low")),
+                open=session_open,
+                high=session_high,
+                low=session_low,
                 close=price,
-                volume=_to_float(bar.get("Volume")),
+                volume=cumulative_volume,
                 currency=str(_pick(info, "financialCurrency", "currency") or "USD").upper(),
             )
 

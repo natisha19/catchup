@@ -104,6 +104,9 @@ class ChangeDetailOut(BaseModel):
     latest_signal: ChangeSignalOut | None = Field(alias="latestSignal")
     other_signals: list[ChangeSignalOut] = Field(alias="otherSignals", default_factory=list)
     last_checked_note: str | None = Field(alias="lastCheckedNote", default=None)
+    # Per-instrument exchange-calendar status (spec §16). Independent of the
+    # feed's global status and never inferred from data recency.
+    market_status: str | None = Field(alias="marketStatus", default=None)
 
     model_config = _alias
 
@@ -157,6 +160,24 @@ class CreateWatchlistRequest(BaseModel):
 
 class InstrumentSearchResultOut(BaseModel):
     instrument: InstrumentOut
+
+
+class ExploreItemOut(BaseModel):
+    instrument: InstrumentOut
+    snapshot: MarketSnapshotOut | None = None
+    signal: ChangeSignalOut | None = None
+
+    model_config = _alias
+
+
+class ExploreOut(BaseModel):
+    movers: list[ExploreItemOut]
+    dippers: list[ExploreItemOut]
+    unusual: list[ExploreItemOut]
+    # Distinct sectors present in the discovery universe ("by sector" browsing).
+    sectors: list[str]
+
+    model_config = _alias
 
 
 class ErrorOut(BaseModel):

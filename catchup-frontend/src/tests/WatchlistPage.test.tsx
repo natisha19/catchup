@@ -9,8 +9,25 @@ vi.mock("../hooks/useApis", () => ({ useApis: vi.fn() }));
 
 import { useApis } from "../hooks/useApis";
 
+const mockCommissionedFeed = {
+  lastCheckedAt: null,
+  marketStatus: "CLOSED" as const,
+  changes: [],
+  unchangedCount: 0,
+  providerStatus: "AVAILABLE" as const,
+  userRelevance: null,
+  acknowledgement: {},
+};
+
+const mockCatchup = {
+  getFeed: vi.fn().mockResolvedValue(mockCommissionedFeed),
+  getInstrumentChange: vi.fn(),
+  markSeen: vi.fn().mockResolvedValue(undefined),
+};
+
 const mockWatchlist = {
   getWatchlist: vi.fn(),
+  getMarketSnapshots: vi.fn().mockResolvedValue([]),
   addInstrument: vi.fn().mockResolvedValue(undefined),
   removeInstrument: vi.fn().mockResolvedValue(undefined),
 };
@@ -28,7 +45,7 @@ const mockInstrument = {
 
 function setup() {
   vi.mocked(useApis).mockReturnValue({
-    catchup: {},
+    catchup: mockCatchup,
     watchlist: mockWatchlist,
     instrument: mockInstrument,
   } as never);
@@ -44,6 +61,7 @@ const renderPage = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   mockWatchlist.getWatchlist.mockResolvedValue({ items: [], updatedAt: "2025-01-15T00:00:00Z" });
+  mockCatchup.getFeed.mockResolvedValue(mockCommissionedFeed);
 });
 
 describe("WatchlistPage", () => {
@@ -52,6 +70,15 @@ describe("WatchlistPage", () => {
     renderPage();
     expect(await screen.findByText("Your watchlist is empty.")).toBeInTheDocument();
     expect(screen.getByText("Add stocks you want Catchup to remember.")).toBeInTheDocument();
+  });
+
+  it("shows a compact welcome box with exactly one Add-a-stock action on first visit", async () => {
+    setup();
+    renderPage();
+    expect(await screen.findByText("Welcome to Catchup.")).toBeInTheDocument();
+    // The page header owns the single clear primary CTA; no duplicate buttons.
+    expect(screen.getByRole("button", { name: "Add a stock" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add a stock" })).toHaveLength(1);
   });
 
   it("renders an API failure state", async () => {
@@ -125,7 +152,7 @@ describe("WatchlistPage", () => {
     });
     const user = userEvent.setup();
     renderPage();
-    await screen.findByText("TCS");
+    await screen.findByRole("link", { name: "TCS" });
     await user.click(screen.getByRole("button", { name: /Remove TCS/ }));
     await waitFor(() =>
       expect(mockWatchlist.removeInstrument).toHaveBeenCalledWith("tcs"),

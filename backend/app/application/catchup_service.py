@@ -14,9 +14,11 @@ database session or a market provider directly.
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from datetime import datetime, timezone
 
-from app.application.market_clock import NseCalendar, market_status
+from app.application.market_clock import NseCalendar, exchange_calendar, market_status
+from app.application.personalization import watchlist_composition
 from app.domain.entities import (
     CatchupFeed,
     ChangeDetail,
@@ -115,18 +117,24 @@ class CatchupService:
         ordered = self._ranker.rank(changes, user_id)
 
         latest_observed = self._latest_observed_at(latest_snapshots, instrument_ids)
-        market = market_status(latest_observed, calendar=self._calendar)
+        feed_exchange = self._feed_exchange(watchlist.items)
+        feed_calendar = exchange_calendar(feed_exchange)
+        market = market_status(latest_observed, calendar=feed_calendar)
         provider = self._provider_status(latest_snapshots.values())
         last_checked = self._global_last_checked(seen_map)
 
         return CatchupFeed(
             last_checked_at=last_checked,
             market_status=market,
-            last_market_session_at=self._calendar.previous_session_end(),
+            last_market_session_at=feed_calendar.previous_session_end(),
             changes=ordered,
             unchanged_count=unchanged,
             provider_status=provider,
-            user_relevance=self._ranker.relevance_summary(ordered, user_id),
+            user_relevance=self._relevance(
+                ordered,
+                user_id,
+                [it.instrument for it in watchlist.items],
+            ),
             acknowledgement={
                 iid: snapshot.id if snapshot else None
                 for iid, snapshot in latest_snapshots.items()
@@ -178,7 +186,24 @@ class CatchupService:
             last_checked_note=(
                 seen.last_seen_at.isoformat() if seen else None
             ),
+            market_status=market_status(
+                snapshot.observed_at if snapshot else None,
+                exchange=instrument.exchange,
+            ),
         )
+
+    def get_watchlist_snapshot_details(self, user_id: str) -> list[ChangeDetail]:
+        """Return one current detail per watched instrument.
+
+        This is deliberately a single application operation so browser clients
+        do not need one HTTP request per stock.  It keeps the per-instrument
+        response contract while allowing repository batching to be introduced
+        internally without another API change.
+        """
+        return [
+            self.get_instrument_change(user_id, item.instrument.instrument_id)
+            for item in self._watchlists.get_items(user_id).items
+        ]
 
     # ------------------------------------------------------------- mark seen
     def mark_seen(
@@ -230,6 +255,30 @@ class CatchupService:
             )
 
     # ------------------------------------------------------------ helpers ----
+    @staticmethod
+    def _feed_exchange(watchlist_items: list) -> str:
+        """The exchange dominating this user's watchlist (spec §16: market
+        status is not hardcoded to NSE). Empty watchlist -> NSE default."""
+        counts = Counter(it.instrument.exchange for it in watchlist_items)
+        if not counts:
+            return "NSE"
+        return counts.most_common(1)[0][0]
+
+    def _relevance(
+        self,
+        ordered: list[ChangeSignal],
+        user_id: str,
+        watchlist_instruments: list,
+    ) -> UserRelevance | None:
+        """Real watchlist composition when there is a basis; None otherwise.
+
+        Personalization must be evidence-based: a cold-start user (fewer than
+        MIN_ITEMS instruments, or no sector metadata) gets no claim at all —
+        neither a fabricated preference nor a neutral "prioritisation" line that
+        the UI could read as a personalisation prompt.
+        """
+        return watchlist_composition(watchlist_instruments)
+
     @staticmethod
     def _is_new_since_last_seen(signal: ChangeSignal, seen: UserLastSeen | None) -> bool:
         if seen is None:

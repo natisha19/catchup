@@ -1,31 +1,28 @@
 import { useEffect, useRef, useState } from "react";
-import type { Instrument } from "../../domain/types";
 import { useAsync } from "../../hooks/useAsync";
 import { useApis } from "../../hooks/useApis";
-import { Spinner } from "../common/Spinner";
-import { ErrorState } from "../common/ErrorState";
+import { useAddInstrument } from "../../hooks/useAddInstrument";
+import { SearchBox } from "../search/SearchBox";
 
-type FailedAttempt =
-  | { kind: "id"; instrument: Instrument }
-  | { kind: "symbol"; symbol: string };
+const EMPTY_IDS: ReadonlySet<string> = new Set();
 
-export function AddInstrumentModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AddInstrumentModal({
+  open,
+  onClose,
+  watchedIds,
+}: {
+  open: boolean;
+  onClose: () => void;
+  watchedIds?: ReadonlySet<string>;
+}) {
   const { instrument, watchlist } = useApis();
   const [query, setQuery] = useState("");
-  const [addingId, setAddingId] = useState<string | null>(null);
-  const [added, setAdded] = useState<string[]>([]);
-  const [failed, setFailed] = useState<FailedAttempt | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const closeTimer = useRef<number | undefined>(undefined);
-
+  const add = useAddInstrument(watchlist);
   const search = useAsync(
     () => query.trim() ? instrument.search(query.trim()) : Promise.resolve([]),
     [query, open],
   );
-
-  useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -36,59 +33,27 @@ export function AddInstrumentModal({ open, onClose }: { open: boolean; onClose: 
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  // Reset per-open state (including the auto-close timer).
+  // Reset per-open state (including the auto-close timer). Scoped to the
+  // `open` transition only: depending on the useAddInstrument container would
+  // re-run this effect on every render (fresh object identity) and busy-loop.
   useEffect(() => {
     if (open) {
-      setAdded([]);
-      setFailed(null);
-      setAddingId(null);
+      setQuery("");
+      add.reset();
     }
     return () => window.clearTimeout(closeTimer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // The intended flow: success -> brief "Added" -> modal closes so the
   // watchlist refetches. Never auto-close over an error.
   useEffect(() => {
-    if (!open || added.length === 0 || failed) return;
+    if (!open || add.added.length === 0 || add.failed) return;
     closeTimer.current = window.setTimeout(onClose, 700);
     return () => window.clearTimeout(closeTimer.current);
-  }, [added, failed, open, onClose]);
+  }, [add.added, add.failed, open, onClose]);
 
   if (!open) return null;
-
-  const attemptAdd = async (kind: "id", inst: Instrument) => {
-    setAddingId(inst.instrumentId);
-    setFailed(null);
-    try {
-      // instrumentId addresses an already-known instrument; symbol lets the
-      // backend resolve + persist a catalog stock that has no row yet.
-      await watchlist.addInstrument(inst.instrumentId, inst.symbol);
-      setAdded((a) => [...a, inst.instrumentId]);
-    } catch {
-      setFailed({ kind, instrument: inst });
-    } finally {
-      setAddingId((a) => (a === inst.instrumentId ? null : a));
-    }
-  };
-
-  const attemptAddBySymbol = async (symbol: string) => {
-    setAddingId(symbol);
-    setFailed(null);
-    try {
-      await watchlist.addInstrument("", symbol);
-      setAdded((a) => [...a, symbol]);
-      setQuery("");
-    } catch {
-      setFailed({ kind: "symbol", symbol });
-    } finally {
-      setAddingId((a) => (a === symbol ? null : a));
-    }
-  };
-
-  const retry = () => {
-    if (failed?.kind === "id") void attemptAdd("id", failed.instrument);
-    else if (failed?.kind === "symbol") void attemptAddBySymbol(failed.symbol);
-  };
 
   return (
     <div
@@ -117,102 +82,28 @@ export function AddInstrumentModal({ open, onClose }: { open: boolean; onClose: 
           </button>
         </div>
 
-        <div className="relative mt-4">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
-              <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </span>
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setFailed(null);
+        <div className="mt-4">
+          <SearchBox
+            query={query}
+            onQueryChange={(q) => {
+              setQuery(q);
             }}
-            placeholder="Search by symbol or company…"
-            aria-label="Search instruments"
-            className="w-full rounded-lg border border-line bg-paper py-2 pl-9 pr-3 text-sm text-ink placeholder:text-ink-muted focus:border-signal-notable focus:bg-card"
+            results={search.status === "success" ? search.data : []}
+            loading={search.status === "loading"}
+            error={search.status === "error" ? search.error.message : null}
+            onRetry={() => void search.reload()}
+            watchedIds={watchedIds ?? EMPTY_IDS}
+            addingId={add.addingId}
+            addedIds={add.added}
+            failed={add.failed}
+            onAddInstrument={add.addInstrument}
+            onAddSymbol={(symbol) => {
+              add.addBySymbol(symbol);
+              setQuery("");
+            }}
+            onRetryAdd={add.retry}
+            autoFocus
           />
-        </div>
-
-        {failed && (
-          <div
-            role="alert"
-            className="mt-3 rounded-lg border border-downline bg-downsoft px-3.5 py-2.5"
-          >
-            <p className="text-sm font-medium text-down">
-              Unable to add{" "}
-              <span className="font-semibold">
-                {failed.kind === "id" ? failed.instrument.symbol : failed.symbol}
-              </span>
-            </p>
-            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-ink-soft">
-                It&apos;s already in your watchlist, or the API rejected it.
-              </p>
-              <button onClick={retry} className="text-xs font-semibold text-ink hover:text-ink-soft">
-                Try again
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="mt-3 max-h-72 space-y-0.5 overflow-y-auto" aria-live="polite">
-          {search.status === "loading" && (
-            <div className="py-3"><Spinner label="Searching" /></div>
-          )}
-          {search.status === "error" && (
-            <ErrorState title="Search failed" message={search.error.message} onRetry={search.reload} />
-          )}
-          {search.status === "success" && search.data.length === 0 && (
-            query.trim() ? (
-              <button
-                onClick={() => void attemptAddBySymbol(query.trim())}
-                disabled={addingId != null}
-                className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors hover:bg-paper disabled:opacity-60"
-                aria-label={`Add ${query.trim()} by symbol`}
-              >
-                <span className="min-w-0">
-                  <span className="block truncate font-medium text-ink">Add “{query.trim()}”</span>
-                  <span className="block text-xs text-ink-muted">
-                    not in catalog yet — resolve it
-                  </span>
-                </span>
-                <span className="shrink-0 text-xs font-medium text-signal-notable">
-                  {addingId === query.trim() ? "Adding…" : "Add to watchlist"}
-                </span>
-              </button>
-            ) : (
-              <p className="py-4 text-center text-sm text-ink-muted">No matches.</p>
-            )
-          )}
-          {search.status === "success" && search.data.map(({ instrument: inst }) => {
-            const isAdded = added.includes(inst.instrumentId);
-            return (
-              <button
-                key={inst.instrumentId}
-                onClick={() => void attemptAdd("id", inst)}
-                disabled={isAdded || addingId === inst.instrumentId}
-                className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors hover:bg-paper disabled:opacity-60"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate font-medium text-ink">{inst.companyName}</span>
-                  <span className="block text-xs text-ink-muted">
-                    {inst.symbol} · {inst.exchange}
-                    {inst.currency ? ` · ${inst.currency}` : ""}
-                  </span>
-                </span>
-                <span className="shrink-0 text-xs font-medium text-signal-notable">
-                  {isAdded ? "Added ✓" : addingId === inst.instrumentId ? "Adding…" : "Add to watchlist"}
-                </span>
-              </button>
-            );
-          })}
         </div>
       </div>
     </div>

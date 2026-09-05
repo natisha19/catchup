@@ -23,10 +23,12 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from typing import Callable
 
 from app.analytics.baseline import compute_baseline
 from app.analytics.change_detector import ChangeEvidence, classify_change
 from app.analytics.thresholds import SignificanceThresholds
+from app.application.market_clock import exchange_calendar
 from app.domain.entities import CorporateEvent, Instrument, MarketSnapshot
 from app.domain.enums import DataStatus, ProviderFailure
 from app.domain.interfaces.repositories import (
@@ -35,6 +37,7 @@ from app.domain.interfaces.repositories import (
     InstrumentRepository,
     MarketSnapshotRepository,
 )
+from app.market_data.catalog import InstrumentCatalog
 from app.market_data.data_types import MarketSnapshotCandidate, ProviderResult
 from app.market_data.normalizer import normalize_snapshot
 from app.market_data.provider import MarketDataProvider
@@ -58,6 +61,8 @@ class IngestionService:
         delayed_threshold_minutes: int = 5,
         stale_threshold_minutes: int = 30,
         quote_workers: int = 4,
+        catalog: InstrumentCatalog | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._provider = provider
         self._instruments = instruments
@@ -71,6 +76,10 @@ class IngestionService:
         self._delayed_threshold_minutes = delayed_threshold_minutes
         self._stale_threshold_minutes = stale_threshold_minutes
         self._quote_workers = max(1, quote_workers)
+        self._catalog = catalog
+        # Injectable clock keeps the daily-vs-intraday boundary (and the
+        # baseline window) deterministic in tests; production uses UTC now.
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
 
     def ingest(self, instrument_ids: list[str] | None = None) -> IngestionResult:
         """Full bootstrap pass: fast quotes + slow enrichment in one unit.
@@ -117,7 +126,21 @@ class IngestionService:
                 if inst:
                     resolved.append(inst)
             return resolved
-        return self._instruments.list_active()
+        resolved = self._instruments.list_active()
+        if self._catalog is None:
+            return resolved
+        known = {inst.instrument_id.upper() for inst in resolved}
+        for inst in self._catalog.discovery_instruments():
+            # Persist the discovery instrument (idempotent upsert) so snapshots
+            # and signals can reference a real row even with an empty watchlist,
+            # then include it. Only new discoveries are appended: watchlisted
+            # instruments are already in ``resolved``.
+            if inst.instrument_id.upper() in known:
+                continue
+            saved = self._instruments.save(inst)
+            resolved.append(saved)
+            known.add(saved.instrument_id.upper())
+        return resolved
 
     def _fetch_and_persist_quotes(
         self, instruments: list[Instrument], result: IngestionResult
@@ -204,21 +227,44 @@ class IngestionService:
         result: IngestionResult,
     ) -> None:
         # --- history / baseline evidence ------------------------------------
-        end = datetime.now(timezone.utc)
+        end = self._clock()
         start = end - timedelta(days=self._baseline_window_days * 2)
         history_result = self._provider.get_historical_data(instrument, start, end)
 
         historical_returns: list[float] = []
         historical_volumes: list[float] = []
         if history_result.ok and history_result.value:
-            prices = [h.price for h in history_result.value]
+            # Daily history may still include the current in-progress session:
+            # the daily bar for today is only valid as a historical observation
+            # once that session has completed. Partial current-day bars would
+            # otherwise leak a live return into the baseline (daily-vs-intraday
+            # confusion), so rows newer than the last completed session of this
+            # exchange are excluded before computing the baseline.
+            cutoff = exchange_calendar(
+                instrument.exchange
+            ).last_completed_session_end(end)
+            cutoff_utc = (
+                cutoff if cutoff.tzinfo else cutoff.replace(tzinfo=timezone.utc)
+            ).astimezone(timezone.utc)
+            completed = [
+                h
+                for h in history_result.value
+                if h.observed_at is not None
+                and (
+                    h.observed_at.astimezone(timezone.utc)
+                    if h.observed_at.tzinfo
+                    else h.observed_at.replace(tzinfo=timezone.utc)
+                )
+                <= cutoff_utc
+            ]
+            prices = [h.price for h in completed]
             for i in range(1, len(prices)):
                 if prices[i - 1] and prices[i]:
                     historical_returns.append(
                         ((prices[i] / prices[i - 1]) - 1) * 100
                     )
             historical_volumes = [
-                h.volume for h in history_result.value if h.volume is not None
+                h.volume for h in completed if h.volume is not None
             ]
 
         # --- corporate events ------------------------------------------------
@@ -241,6 +287,10 @@ class IngestionService:
             historical_returns=historical_returns,
             historical_volumes=historical_volumes,
             corporate_events=corporate,
+            # A session-open-to-current return is comparable with the daily
+            # close-to-close baseline. Falling back to the previous snapshot
+            # is retained for providers that do not expose an open.
+            reference_price=current.open,
         )
 
         signal = classify_change(
