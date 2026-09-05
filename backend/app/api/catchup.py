@@ -51,7 +51,7 @@ def get_instrument_change(
     return detail_out(detail, lookup)
 
 
-@router.post("/mark-seen", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/mark-seen", status_code=status.HTTP_200_OK)
 def mark_seen(
     user_id: Annotated[str, Depends(get_user_id)],
     catchup: Annotated[CatchupService, Depends(get_catchup_service)],
