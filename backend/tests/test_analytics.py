@@ -11,7 +11,6 @@ from app.analytics.significance import (
     REASON_PRICE_MOVE,
     REASON_UNUSUAL_RETURN,
     REASON_UNUSUAL_VOLUME,
-    Classification,
     classify_volume,
 )
 from app.analytics.thresholds import SignificanceThresholds

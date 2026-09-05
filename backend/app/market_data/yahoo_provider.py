@@ -13,7 +13,7 @@ Failure strategy (spec §10):
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from app.domain.entities import CorporateEvent, Instrument
 from app.domain.enums import CorporateEventStatus, CorporateEventType, ProviderFailure

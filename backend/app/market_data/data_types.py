@@ -12,7 +12,6 @@ from datetime import datetime
 from typing import Generic, TypeVar
 
 from app.domain.enums import ProviderFailure
-from app.domain.entities import CorporateEvent
 
 T = TypeVar("T")
 
@@ -74,5 +73,4 @@ __all__ = [
     "ProviderResult",
     "MarketSnapshotCandidate",
     "HistoricalData",
-    "CorporateEvent",
 ]

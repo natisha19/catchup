@@ -14,7 +14,7 @@ sophisticated algorithm can be swapped in without touching the API/domain.
 
 from __future__ import annotations
 
-from app.domain.entities import ChangeSignal, UserRelevance
+from app.domain.entities import ChangeSignal
 from app.domain.enums import SignificanceTier
 
 _TIER_ORDER = {
@@ -34,14 +34,3 @@ class RuleBasedRelevanceRanker:
             key=lambda c: (_TIER_ORDER[c.significance], c.observed_at or ""),
             reverse=True,
         )
-
-    def relevance_summary(self, changes: list[ChangeSignal], user_id: str) -> UserRelevance | None:
-        if not changes:
-            return None
-        codes: list[str] = []
-        for c in changes:
-            for code in c.reason_codes:
-                if code not in codes:
-                    codes.append(code)
-        summary = "Your catch-up is prioritised by what is most significant — critical moves always come first."
-        return UserRelevance(summary=summary, top_reason_codes=codes[:5])

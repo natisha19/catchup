@@ -32,7 +32,7 @@ from app.domain.entities import (
     Watchlist,
     WatchlistItem,
 )
-from app.domain.enums import BaselineStatus, SignificanceTier
+from app.domain.enums import BaselineStatus
 
 
 def instrument_out(inst: Instrument) -> InstrumentOut:

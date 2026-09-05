@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from app.analytics.thresholds import SignificanceThresholds
 from app.api.deps import (
     get_catchup_service,
     get_instrument_service,

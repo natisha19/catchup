@@ -26,9 +26,8 @@ from app.domain.entities import (
     MarketSnapshot,
     UserLastSeen,
     UserRelevance,
-    Watchlist,
 )
-from app.domain.enums import MarketStatus, ProviderStatus, SignificanceTier
+from app.domain.enums import ProviderStatus, SignificanceTier
 from app.domain.interfaces.repositories import (
     ChangeSignalRepository,
     InstrumentRepository,

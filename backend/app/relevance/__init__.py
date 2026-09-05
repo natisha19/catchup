@@ -9,12 +9,10 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from app.domain.entities import ChangeSignal, UserRelevance
+from app.domain.entities import ChangeSignal
 
 
 class RelevanceRanker(Protocol):
     """Replaceable interface for ranking/personalization."""
 
     def rank(self, changes: list[ChangeSignal], user_id: str) -> list[ChangeSignal]: ...
-
-    def relevance_summary(self, changes: list[ChangeSignal], user_id: str) -> UserRelevance | None: ...

@@ -17,7 +17,6 @@ from app.domain.entities import (
     ExploreItem,
     ExploreSections,
     Instrument,
-    MarketSnapshot,
 )
 from app.domain.interfaces.repositories import (
     ChangeSignalRepository,

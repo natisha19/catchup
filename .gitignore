@@ -1,11 +1,14 @@
 .env
 .env.*
 !.env.example
-frontenddirstructure.md
 
 node_modules/
+dist/
+*.tsbuildinfo
+
 __pycache__/
 *.pyc
 .venv/
 venv/
-dist/
+.pytest_cache/
+.ruff_cache/

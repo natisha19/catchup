@@ -12,9 +12,8 @@ Run:  $env:CATCHUP_RUN_INTEGRATION=1; python -m pytest tests/integration -v
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_user_id
