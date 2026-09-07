@@ -25,18 +25,29 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["internal"])
 
 
-@router.post("/cron/ingest")
+@router.api_route("/cron/ingest", methods=["GET", "POST"])
 def cron_ingest(
     x_vercel_cron: Annotated[str | None, Header()] = None,
     x_cron_secret: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
 ) -> dict:
     settings = get_settings()
+
     if not settings.CRON_SECRET:
-        raise HTTPException(status_code=403, detail="cron ingestion is not configured")
-    if x_vercel_cron != "1" and x_cron_secret != settings.CRON_SECRET:
+        raise HTTPException(
+            status_code=403,
+            detail="cron ingestion is not configured",
+        )
+
+    valid_header_secret = x_cron_secret == settings.CRON_SECRET
+    valid_bearer_secret = authorization == f"Bearer {settings.CRON_SECRET}"
+    valid_vercel_cron = x_vercel_cron == "1"
+
+    if not (valid_header_secret or valid_bearer_secret or valid_vercel_cron):
         raise HTTPException(status_code=403, detail="forbidden")
 
     quote_result, enrich_result = run_tick(enrich=True)
+
     logger.info(
         "cron tick ok instruments=%d snapshots=%d invalid=%d failures=%d signals=%d",
         quote_result.instruments,
@@ -45,4 +56,5 @@ def cron_ingest(
         quote_result.provider_failures,
         enrich_result.signals if enrich_result else 0,
     )
+
     return {"ok": True}
