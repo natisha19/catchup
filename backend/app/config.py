@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     SESSION_TTL_SECONDS: int = 7 * 24 * 60 * 60
     AUTH_REQUIRED: bool = False
 
+    # Shared secret that guards the /cron/ingest endpoint. Vercel Cron sends the
+    # x-vercel-cron header; deployments that cannot rely on it must present this
+    # header instead. Empty means cron ingestion is disabled (403).
+    CRON_SECRET: str = ""
+
     LOG_LEVEL: str = "INFO"
 
     @property

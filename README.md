@@ -4,6 +4,8 @@
 you what meaningfully changed when you return.** It is an attention inbox for a
 stock watchlist.
 
+**Live deployment:** https://catchup-nu-two.vercel.app/
+
 The project has two parts:
 
 | Directory | What it is |
@@ -23,6 +25,7 @@ The project has two parts:
   - [3. Ingestion worker](#3-ingestion-worker)
   - [4. Run the API](#4-run-the-api)
   - [5. Frontend → real API](#5-frontend--real-api)
+  - [6. Optional — serverless worker on Vercel](#6-optional--serverless-worker-on-vercel)
 - [Tests](#tests)
 - [Environment variables](#environment-variables)
 - [How honest is the data?](#how-honest-is-the-data)
@@ -173,6 +176,46 @@ After you have the worker saving snapshots, add a few stocks from the UI (or a
 > configuration error instead of starting — it will not serve mock data in a
 > production build.
 
+### 6. Optional — serverless worker on Vercel
+
+CATCHUP's ingestion normally runs as an always-on background worker
+(`run_forever()`). That couldn't be deployed on our host (Render), so we drive
+ingestion the serverless way instead: Vercel has no long-running processes, but
+it does have Cron Jobs. A Vercel Cron calls `POST /cron/ingest`, which runs one
+self-contained tick (`run_tick(enrich=True)` — own DB session, quoted +
+enriched, committed as one unit). That is why the cron approach exists — it is
+the same work, triggered by schedule instead of a loop. The repo ships the
+wiring:
+
+- `backend/api/index.py` — the Vercel serverless entrypoint (same FastAPI app).
+- `backend/vercel.json` — rewrites every route to that function, schedules the
+  cron (hourly by default), and caps function duration at 60s.
+- `backend/app/api/cron.py` — the protected `/cron/ingest` route. It only runs
+  when `CRON_SECRET` is set, and accepts requests that either carry Vercel's
+  `x-vercel-cron: 1` header or present `x-cron-secret`.
+
+To deploy:
+
+```bash
+cd backend
+vercel login
+vercel link
+vercel env add CRON_SECRET        # generate one, e.g. openssl rand -hex 32
+vercel env add DATABASE_URL       # must be reachable from Vercel (Supabase etc.)
+vercel env add SESSION_SECRET
+vercel env add INGESTION_ENABLED  # false — the cron drives ticks
+vercel deploy --prod
+```
+
+Run migrations once against the deployed database before pushing (`alembic
+upgrade head` from your machine, pointing `DATABASE_URL` at it).
+
+Limits to accept: Hobby crons run at most 1×/day (Pro allows hourly or more),
+and the 60s function cap means large symbol sets can time out mid-enrichment —
+keep the watchlist small or reduce `PROVIDER_MAX_RETRIES`/`INGESTION_QUOTE_WORKERS`.
+For strict 5-minute polling with retries, run the always-on worker on a VPS or
+Railway/Fly.io instead.
+
 ---
 
 ## Tests
@@ -199,7 +242,7 @@ npm test
 npm run build        # runs tsc typecheck + production bundle
 ```
 
-Current suite: backend `pytest` (176 tests) and frontend vitest (36 tests) +
+Current suite: backend `pytest` (179 tests) and frontend vitest (36 tests) +
 clean `tsc`.
 
 ---
@@ -215,6 +258,7 @@ examples. The important ones:
 | `CORS_ORIGINS` | Allowed frontend origins | `http://localhost:5173,http://127.0.0.1:5173` |
 | `SESSION_SECRET` | Signs session tokens — change in any deployed env | `dev-only-secret-change-me` |
 | `AUTH_REQUIRED` | `true` → all requests need a session token | `false` |
+| `CRON_SECRET` | Guards `POST /cron/ingest` (serverless ingestion) | empty (disabled) |
 | `INGESTION_ENABLED` | Whether the periodic worker loop runs | `false` |
 | `INGESTION_INTERVAL_SECONDS` | Quote polling interval | `300` |
 | `STALE_THRESHOLD_MINUTES` / `DELAYED_THRESHOLD_MINUTES` | Freshness → `DataStatus` | `30` / `5` |
