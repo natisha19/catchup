@@ -46,7 +46,14 @@ def cron_ingest(
     if not (valid_header_secret or valid_bearer_secret or valid_vercel_cron):
         raise HTTPException(status_code=403, detail="forbidden")
 
-    quote_result, enrich_result = run_tick(enrich=True)
+    try:
+        quote_result, enrich_result = run_tick(enrich=True)
+    except Exception as exc:
+        logger.exception("cron ingestion failed")
+        raise HTTPException(
+            status_code=500,
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
 
     logger.info(
         "cron tick ok instruments=%d snapshots=%d invalid=%d failures=%d signals=%d",
