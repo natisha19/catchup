@@ -19,7 +19,6 @@ from fastapi import APIRouter, Header, HTTPException
 
 from app.config import get_settings
 from app.infrastructure.scheduler.worker import run_tick
-import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +46,7 @@ def cron_ingest(
     if not (valid_header_secret or valid_bearer_secret or valid_vercel_cron):
         raise HTTPException(status_code=403, detail="forbidden")
 
-    try:
-        quote_result, enrich_result = run_tick(enrich=True)
-    except Exception as exc:
-        logger.exception("cron ingestion failed")
-        raise HTTPException(
-            status_code=500,
-            detail=f"{type(exc).__name__}: {exc}",
-        ) from exc
+    quote_result, enrich_result = run_tick(enrich=True)
 
     logger.info(
         "cron tick ok instruments=%d snapshots=%d invalid=%d failures=%d signals=%d",
@@ -67,39 +59,3 @@ def cron_ingest(
 
     return {"ok": True}
 
-
-@router.get("/cron/yahoo-test")
-def yahoo_test() -> dict:
-    results = {}
-
-    for symbol in ["TCS.NS", "SBIN.NS"]:
-        try:
-            bars = yf.Ticker(symbol).history(
-                period="1d",
-                interval="1m",
-                auto_adjust=False,
-            )
-
-            if bars is None or bars.empty:
-                results[symbol] = {
-                    "ok": False,
-                    "error": "empty response",
-                }
-                continue
-
-            when, bar = next(reversed(list(bars.iterrows())))
-
-            results[symbol] = {
-                "ok": True,
-                "last_timestamp": str(when),
-                "last_close": float(bar["Close"]),
-                "rows": len(bars),
-            }
-
-        except Exception as exc:
-            results[symbol] = {
-                "ok": False,
-                "error": f"{type(exc).__name__}: {exc}",
-            }
-
-    return results
