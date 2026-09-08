@@ -38,3 +38,49 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           python -c "from app.infrastructure.scheduler.worker import run_once; run_once()"
+      
+
+      - name: Test Twelve Data
+        env:
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          import requests
+
+          api_key = os.environ["TWELVE_DATA_API_KEY"]
+
+          symbols = [
+              "TCS:NSE",
+              "SBIN:NSE",
+              "ICICIBANK:NSE",
+              "AAPL",
+              "NVDA",
+              "META",
+          ]
+
+          for symbol in symbols:
+              print(f"\n--- {symbol} ---")
+
+              response = requests.get(
+                  "https://api.twelvedata.com/time_series",
+                  params={
+                      "symbol": symbol,
+                      "interval": "1min",
+                      "outputsize": 2,
+                      "apikey": api_key,
+                  },
+                  timeout=20,
+              )
+
+              print("STATUS:", response.status_code)
+
+              data = response.json()
+
+              if data.get("status") == "error":
+                  print("ERROR:", data.get("message"))
+              else:
+                  print("SYMBOL:", data.get("meta", {}).get("symbol"))
+                  print("EXCHANGE:", data.get("meta", {}).get("exchange"))
+                  print("VALUES:", data.get("values", [])[:2])
+          PY
