@@ -126,21 +126,8 @@ class IngestionService:
                 if inst:
                     resolved.append(inst)
             return resolved
-        resolved = self._instruments.list_active()
-        if self._catalog is None:
-            return resolved
-        known = {inst.instrument_id.upper() for inst in resolved}
-        for inst in self._catalog.discovery_instruments():
-            # Persist the discovery instrument (idempotent upsert) so snapshots
-            # and signals can reference a real row even with an empty watchlist,
-            # then include it. Only new discoveries are appended: watchlisted
-            # instruments are already in ``resolved``.
-            if inst.instrument_id.upper() in known:
-                continue
-            saved = self._instruments.save(inst)
-            resolved.append(saved)
-            known.add(saved.instrument_id.upper())
-        return resolved
+
+        return self._instruments.list_active()
 
     def _fetch_and_persist_quotes(
         self, instruments: list[Instrument], result: IngestionResult
