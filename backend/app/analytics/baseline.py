@@ -6,13 +6,15 @@ self-contamination of the anomaly measure.
 
 Baseline sufficiency (spec §17-18):
 - >= MIN_BASELINE_RETURNS      -> SUFFICIENT
-- >= LIMITED_BASELINE_RETURNS  -> LIMITED    (z_score may remain usable if std>0)
-- otherwise                    -> UNAVAILABLE (z_score = None, never invented)
+- >= LIMITED_BASELINE_RETURNS  -> LIMITED
+  (z_score may remain usable if std > 0)
+- otherwise                    -> UNAVAILABLE
+  (z_score = None, never invented)
 """
 
 from __future__ import annotations
 
-import statistics
+import math
 from dataclasses import dataclass
 
 from app.domain.enums import BaselineStatus
@@ -44,6 +46,7 @@ def compute_baseline(
             std=_std(returns),
             sample_size=len(returns),
         )
+
     if len(returns) >= limited_returns:
         return Baseline(
             status=BaselineStatus.LIMITED,
@@ -51,6 +54,7 @@ def compute_baseline(
             std=_std(returns),
             sample_size=len(returns),
         )
+
     return Baseline(
         status=BaselineStatus.UNAVAILABLE,
         mean=None,
@@ -60,10 +64,29 @@ def compute_baseline(
 
 
 def _mean(values: list[float]) -> float:
-    return statistics.fmean(values)
+    """Arithmetic mean."""
+    if not values:
+        return 0.0
+
+    return sum(float(value) for value in values) / len(values)
 
 
 def _std(values: list[float]) -> float:
+    """Sample standard deviation.
+
+    Uses an explicit floating-point calculation instead of
+    statistics.stdev(), avoiding the Fraction/numerator issue encountered
+    during serverless ingestion.
+    """
     if len(values) < 2:
         return 0.0
-    return statistics.stdev(values)
+
+    numeric_values = [float(value) for value in values]
+    mean = sum(numeric_values) / len(numeric_values)
+
+    variance = sum(
+        (value - mean) ** 2
+        for value in numeric_values
+    ) / (len(numeric_values) - 1)
+
+    return math.sqrt(variance)
