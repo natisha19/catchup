@@ -2,16 +2,9 @@ name: Market Ingestion
 
 on:
   workflow_dispatch:
-
   schedule:
-    # 09:15 IST — market open
-    - cron: "45 3 * * 1-5"
-
-    # Every 15 minutes from 09:30 to 15:15 IST
-    - cron: "*/15 4-9 * * 1-5"
-
-    # 15:30 IST — final market tick
-    - cron: "0 10 * * 1-5"
+    # 16:30 IST, Monday-Friday
+    - cron: "0 11 * * 1-5"
 
 jobs:
   ingest:
@@ -22,65 +15,16 @@ jobs:
         working-directory: backend
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
       - name: Run market ingestion
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          python -c "from app.infrastructure.scheduler.worker import run_once; run_once()"
-      
-
-      - name: Test Twelve Data
-        env:
-          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
-        run: |
-          python - <<'PY'
-          import os
-          import requests
-
-          api_key = os.environ["TWELVE_DATA_API_KEY"]
-
-          symbols = [
-              "TCS:NSE",
-              "SBIN:NSE",
-              "ICICIBANK:NSE",
-              "AAPL",
-              "NVDA",
-              "META",
-          ]
-
-          for symbol in symbols:
-              print(f"\n--- {symbol} ---")
-
-              response = requests.get(
-                  "https://api.twelvedata.com/time_series",
-                  params={
-                      "symbol": symbol,
-                      "interval": "1min",
-                      "outputsize": 2,
-                      "apikey": api_key,
-                  },
-                  timeout=20,
-              )
-
-              print("STATUS:", response.status_code)
-
-              data = response.json()
-
-              if data.get("status") == "error":
-                  print("ERROR:", data.get("message"))
-              else:
-                  print("SYMBOL:", data.get("meta", {}).get("symbol"))
-                  print("EXCHANGE:", data.get("meta", {}).get("exchange"))
-                  print("VALUES:", data.get("values", [])[:2])
-          PY
+          python -c "from app.infrastructure.scheduler.worker import run_once; print(run_once())"
