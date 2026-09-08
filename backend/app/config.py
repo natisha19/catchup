@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # Market data provider
     PROVIDER_TIMEOUT_SECONDS: float = 10.0
     PROVIDER_MAX_RETRIES: int = 3
+    BHARATSTOCK_API_KEY: str = ""
 
     # Ingestion
     INGESTION_INTERVAL_SECONDS: int = 300
@@ -71,7 +72,11 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        production_origin = "https://catchup-nu-two.vercel.app"
+        if production_origin not in origins:
+            origins.append(production_origin)
+        return origins
 
 
 @lru_cache
