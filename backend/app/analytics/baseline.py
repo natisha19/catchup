@@ -72,12 +72,6 @@ def _mean(values: list[float]) -> float:
 
 
 def _std(values: list[float]) -> float:
-    """Sample standard deviation.
-
-    Uses an explicit floating-point calculation instead of
-    statistics.stdev(), avoiding the Fraction/numerator issue encountered
-    during serverless ingestion.
-    """
     if len(values) < 2:
         return 0.0
 
